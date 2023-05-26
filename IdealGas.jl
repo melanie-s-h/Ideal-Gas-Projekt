@@ -1,7 +1,7 @@
 #========================================================================================#
 """
 	IdealGas
-änderung
+
 Extending SimpleParticles to conserve kinetic energy and momentum.
 
 Author: Niall Palfreyman, 20/01/23
