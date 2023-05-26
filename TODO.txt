@@ -38,3 +38,4 @@ pV/T= N*kB
 
 Fragen an Palfreyman:
 - Absolute Änderung der Entropie oder relative Änderung der Entropie?
+- Muss die Anzeige von Varialen wie z.B Volumen exact dem realen Wert entsprechen, oder sollte man die Nutzerfreundlichkeit erhöhen und die Werte runden?   

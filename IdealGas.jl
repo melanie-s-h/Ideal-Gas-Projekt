@@ -8,7 +8,8 @@ Author: Niall Palfreyman, 20/01/23
 """
 module IdealGas
 
-using Agents, LinearAlgebra, GLMakie, InteractiveDynamics
+include("AgentTools.jl")
+using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools
 
 #-----------------------------------------------------------------------------------------
 # Module types:
