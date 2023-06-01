@@ -1,15 +1,15 @@
 #========================================================================================#
 """
 	IdealGas
-
+änderung
 Extending SimpleParticles to conserve kinetic energy and momentum.
 
 Author: Niall Palfreyman, 20/01/23
 """
 module IdealGas
 
-include( "AgentTools.jl")
 
+include("AgentTools.jl")
 using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools
 
 #-----------------------------------------------------------------------------------------
