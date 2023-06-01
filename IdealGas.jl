@@ -8,6 +8,7 @@ Author: Niall Palfreyman, 20/01/23
 """
 module IdealGas
 
+
 include("AgentTools.jl")
 using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools
 
@@ -41,11 +42,17 @@ function idealgas(;
     n_particles = 50,				# Number of Particles in box
 	masses = [1.0],					# Possible masses of Particles
     init_speed = 1.0,				# Initial speed of Particles in box
-	radius = 1,						# Radius of Particles in the box
+	radius = 5,						# Radius of Particles in the box
     extent = (100, 40),				# Extent of Particles space
 )
     space = ContinuousSpace(extent; spacing = radius/1.5)
-    box = ABM( Particle, space; scheduler = Schedulers.Randomly())
+
+	properties = Dict(
+		:n_particles	=> n_particles,
+		
+	)
+
+    box = ABM( Particle, space; properties, scheduler = Schedulers.Randomly())
 
     for _ in 1:n_particles
         vel = Tuple( 2rand(2).-1)
@@ -127,12 +134,17 @@ end
 
 Run a simulation of the IdealGas model.
 """
+
+params = Dict(
+		:n_particles => 20:1:100,
+	)
+
 function demo()
 	box = idealgas()
 	
 	playground, = abmplayground( box, idealgas;
 	agent_step!, 
-	#params
+	params
 )
 
 	playground 
