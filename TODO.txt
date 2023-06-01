@@ -20,7 +20,13 @@ E(innere energie des gases):
 S(Entropie):
     dS = δQ/T
 - Entropie in einem Graphen über die Zeit darstellen
-- 
+- Entropieänderung darstellen
+- beliebien Entropie startpunkt wählen
+
+
+Diagramme:
+Druck/Volumen
+Temperatur/Entropie
 
 Eigenschaften vorhanden:
 partikemasse (Art des Gases)
@@ -38,4 +44,16 @@ pV/T= N*kB
 
 Fragen an Palfreyman:
 - Absolute Änderung der Entropie oder relative Änderung der Entropie?
-- Muss die Anzeige von Varialen wie z.B Volumen exact dem realen Wert entsprechen, oder sollte man die Nutzerfreundlichkeit erhöhen und die Werte runden?   
+
+- Muss die Anzeige von Variablen wie z.B Volumen exact dem realen Wert entsprechen, oder sollte man die Nutzerfreundlichkeit erhöhen und die Werte runden?
+- Welche Gasarten sollen simuliert werden ?
+- in welchem Maßstab soll die Simulation stattfinden ? (50 Teilchen oder 500.000 Teilchen)
+    - Darstellung muss jenachdem angepasst werden
+
+Grundlagen
+- Festlegen von Systemgrenzen
+- Thema ideales Gas
+
+
+- Größe 200 L Volumen
+- 
