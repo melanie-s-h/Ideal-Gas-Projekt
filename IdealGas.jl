@@ -42,8 +42,8 @@ function idealgas(;
     n_particles = 50,				# Number of Particles in box
 	masses = [1.0],					# Possible masses of Particles
     init_speed = 1.0,				# Initial speed of Particles in box
-	radius = 5,						# Radius of Particles in the box
-    extent = (100, 40),				# Extent of Particles space
+	radius = 1,						# Radius of Particles in the box
+    extent = (100, 50),				# Extent of Particles space
 )
     space = ContinuousSpace(extent; spacing = radius/1.5)
 
@@ -105,7 +105,11 @@ function agent_step!(me::Particle, box::ABM)
 		end
 	end
 
+	temp = calc_temperature(me)
+	println(me.speed)
+
 	move_agent!( me, box, me.speed)							# Advance me with my current speed
+	
 end
 
 #-----------------------------------------------------------------------------------------
@@ -129,6 +133,21 @@ function kinetic_energy(particle)
 end
 
 #-----------------------------------------------------------------------------------------
+
+"""
+	calc_temperature
+
+Return the temperature of the system.
+"""
+
+function calc_temperature(particle)
+#k =	1,38*10^-23 # Boltzmann Konstanze
+particle.mass * norm(particle.speed)^2 * 2/3 * (1/1.38*10^-23)
+
+end
+
+
+#------------------------------------------------------------------------------------------
 """
 	demo()
 
