@@ -50,10 +50,11 @@ Fragen an Palfreyman:
 - in welchem Maßstab soll die Simulation stattfinden ? (50 Teilchen oder 500.000 Teilchen)
     - Darstellung muss jenachdem angepasst werden
 
-Grundlagen
-- Festlegen von Systemgrenzen
-- Thema ideales Gas
 
 
 - Größe 200 L Volumen
-- 
+
+TODO 1:
+Anzahl der Partikel, auf basis der "realen" Partikelanzahl der Berechnungen, für die Darstellung kleiner skalieren
+
+
