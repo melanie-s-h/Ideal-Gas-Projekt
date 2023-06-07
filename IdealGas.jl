@@ -40,25 +40,31 @@ Create and initialise the IdealGas model.
 """
 function idealgas(;
     n_particles = 50,				# Number of Particles in box
-	masses = [1.0],					# Possible masses of Particles
-    init_speed = 1.0,				# Initial speed of Particles in box
+	mass_u = 4.0,					# Helium Gas mass in atomic mass units
+	init_temp = 300.0,				# Initial temperature of the gas in Kelvin
 	radius = 1,						# Radius of Particles in the box
     extent = (100, 50),				# Extent of Particles space
+
 )
     space = ContinuousSpace(extent; spacing = radius/1.5)
 
 	properties = Dict(
 		:n_particles	=> n_particles,
-		
+		:init_temp		=> init_temp,
 	)
 
     box = ABM( Particle, space; properties, scheduler = Schedulers.Randomly())
 
-    for _ in 1:n_particles
-        vel = Tuple( 2rand(2).-1)
-		vel = vel ./ norm(vel)		# ALWAYS maintain normalised state of vel!
-        add_agent!( box, vel, rand(masses), init_speed, radius, non_id)
-    end
+    k = 1.38e-23  # Boltzmann constant in J/K
+	mass_kg = mass_u * 1.66053906660e-27  # Convert atomic/molecular mass to kg
+	max_speed = 1000.0  # Maximum speed in m/s
+	for _ in 1:n_particles
+		vel = Tuple( 2rand(2).-1)
+		vel = vel ./ norm(vel)  # ALWAYS maintain normalised state of vel!
+		speed = sqrt((3 * k * box.properties[:init_temp]) / mass_kg)  # Initial speed based on temperature
+		speed = scale_speed(speed, max_speed)  # Scale speed to avoid excessive velocities
+        add_agent!( box, vel, mass_kg, speed, radius, non_id)
+	end
 
     return box
 end
@@ -104,12 +110,7 @@ function agent_step!(me::Particle, box::ABM)
 			her.vel = her.vel ./ norm(her.vel)
 		end
 	end
-
-	temp = calc_temperature(me)
-	println(me.speed)
-
-	move_agent!( me, box, me.speed)							# Advance me with my current speed
-	
+	move_agent!(me, box, me.speed)
 end
 
 #-----------------------------------------------------------------------------------------
@@ -133,6 +134,19 @@ function kinetic_energy(particle)
 end
 
 #-----------------------------------------------------------------------------------------
+"""
+	scale_speed(speed, max_speed)
+
+Scales a speed value to the interval [0,1] based on the provided max_speed.
+"""
+function scale_speed(speed, max_speed)
+	if speed > max_speed
+		speed = max_speed
+	end
+    return speed / max_speed
+end
+
+#-----------------------------------------------------------------------------------------
 
 """
 	calc_temperature
@@ -140,14 +154,51 @@ end
 Return the temperature of the system.
 """
 
-function calc_temperature(particle)
-#k =	1,38*10^-23 # Boltzmann Konstanze
-particle.mass * norm(particle.speed)^2 * 2/3 * (1/1.38*10^-23)
+function calc_temperature(box::ABM)
+    total_energy = 0.0
+    for p in allagents(box)
+        total_energy += kinetic_energy(p)
+    end
+    # k = 1.38e-23 is the Boltzmann constant
+    T = total_energy / (1.38e-23 * 3/2 * box.properties[:n_particles])
+    box.properties[:init_temp] = T
+    return T
+end
 
+
+
+#-----------------------------------------------------------------------------------------
+"""
+	model_step!( model)
+
+This is the heart of the IdealGas model: It calculates how Particles collide with each other
+while conserving momentum and kinetic energy.
+"""
+function model_step!(model)
+    println("Temperature: ", calc_temperature(model))
+    println("Pressure: ", calc_pressure(model))
 end
 
 
 #------------------------------------------------------------------------------------------
+
+"""
+	calc_pressure(box)
+
+Return the pressure of the system.
+"""
+function calc_pressure(box::ABM)
+    R = 8.314 # Gaskonstante in J/(mol·K)
+    n = box.properties[:n_particles] # Anzahl der Moleküle (angenommen, jedes Partikel repräsentiert ein Molekül)
+    V = box.space.extent[1] * box.space.extent[2] # Volumen der Box, unter der Annahme, dass sie 2D ist
+    T = calc_temperature(box) # Durchschnittstemperatur
+
+    P = n * R * T / V
+    return P
+end
+
+#----------------------------------------------------------------------------------------
+
 """
 	demo()
 
@@ -156,13 +207,15 @@ Run a simulation of the IdealGas model.
 
 params = Dict(
 		:n_particles => 20:1:100,
+		:init_temp => 100.0:1.0:1000.0
 	)
 
 function demo()
 	box = idealgas()
 	
 	playground, = abmplayground( box, idealgas;
-	agent_step!, 
+	agent_step!,
+	model_step!,
 	params
 )
 
