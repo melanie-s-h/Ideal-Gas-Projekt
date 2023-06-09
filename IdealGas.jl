@@ -41,16 +41,19 @@ Create and initialise the IdealGas model.
 function idealgas(;
     n_particles = 50,				# Number of Particles in box
 	mass_u = 4.0,					# Helium Gas mass in atomic mass units
-	init_temp = 300.0,				# Initial temperature of the gas in Kelvin
+	temp = 300.0,				# Initial temperature of the gas in Kelvin
 	radius = 1,						# Radius of Particles in the box
     extent = (100, 50),				# Extent of Particles space
-
+	e_inner = 0.0, #TODO: Start values berechnen
+	pressure = 0.0
 )
     space = ContinuousSpace(extent; spacing = radius/1.5)
 
 	properties = Dict(
 		:n_particles	=> n_particles,
-		:init_temp		=> init_temp,
+		:temp		=> temp,
+		:e_inner	=> e_inner,
+		:pressure	=> pressure
 	)
 
     box = ABM( Particle, space; properties, scheduler = Schedulers.Randomly())
@@ -61,7 +64,7 @@ function idealgas(;
 	for _ in 1:n_particles
 		vel = Tuple( 2rand(2).-1)
 		vel = vel ./ norm(vel)  # ALWAYS maintain normalised state of vel!
-		speed = sqrt((3 * k * box.properties[:init_temp]) / mass_kg)  # Initial speed based on temperature
+		speed = sqrt((3 * k * box.temp) / mass_kg)  # Initial speed based on temperature
 		speed = scale_speed(speed, max_speed)  # Scale speed to avoid excessive velocities
         add_agent!( box, vel, mass_kg, speed, radius, non_id)
 	end
@@ -153,16 +156,9 @@ end
 
 Return the temperature of the system.
 """
-
-function calc_temperature(box::ABM)
-    total_energy = 0.0
-    for p in allagents(box)
-        total_energy += kinetic_energy(p)
-    end
-    # k = 1.38e-23 is the Boltzmann constant
-    T = total_energy / (1.38e-23 * 3/2 * box.properties[:n_particles])
-    box.properties[:init_temp] = T
-    return T
+function calc_temperature(model::ABM)   
+    # T = Ekin / (k * 2/3 * N ); Boltzmann constant k = 1.38e-23 
+	model.e_inner / (1.38e-23 * 3/2 * model.n_particles)
 end
 
 
@@ -171,12 +167,16 @@ end
 """
 	model_step!( model)
 
-This is the heart of the IdealGas model: It calculates how Particles collide with each other
-while conserving momentum and kinetic energy.
+
 """
-function model_step!(model)
-    println("Temperature: ", calc_temperature(model))
-    println("Pressure: ", calc_pressure(model))
+function model_step!(model::ABM)
+    total_ekin = 0.0
+    for particle in allagents(model)
+        total_ekin += kinetic_energy(particle)
+    end
+	model.e_inner = total_ekin
+	model.temp = calc_temperature(model)
+	model.pressure = calc_pressure(model)
 end
 
 
@@ -187,11 +187,11 @@ end
 
 Return the pressure of the system.
 """
-function calc_pressure(box::ABM)
+function calc_pressure(model::ABM)
     R = 8.314 # Gaskonstante in J/(mol·K)
-    n = box.properties[:n_particles] # Anzahl der Moleküle (angenommen, jedes Partikel repräsentiert ein Molekül)
-    V = box.space.extent[1] * box.space.extent[2] # Volumen der Box, unter der Annahme, dass sie 2D ist
-    T = calc_temperature(box) # Durchschnittstemperatur
+    n = model.n_particles # Anzahl der Moleküle (angenommen, jedes Partikel repräsentiert ein Molekül)
+    V = model.space.extent[1] * model.space.extent[2] # Volumen der Box, unter der Annahme, dass sie 2D ist
+    T = calc_temperature(model) # Durchschnittstemperatur
 
     P = n * R * T / V
     return P
@@ -207,15 +207,22 @@ Run a simulation of the IdealGas model.
 
 params = Dict(
 		:n_particles => 20:1:100,
-		:init_temp => 100.0:1.0:1000.0
+		:temp => 100.0:1.0:1000.0,
+		:pressure=> 0.0:0.1:12.0
 	)
 
 function demo()
 	box = idealgas()
+
+	inner_energy(box) = box.e_inner
+	temperature(box) = box.temp
+	pressure(box) = box.pressure
+	mdata = [inner_energy, temperature, pressure]
 	
 	playground, = abmplayground( box, idealgas;
 	agent_step!,
 	model_step!,
+	mdata,
 	params
 )
 
