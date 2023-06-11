@@ -39,13 +39,20 @@ const non_id = -1
 Create and initialise the IdealGas model.
 """
 function idealgas(;
-    n_particles = 50,				# Number of Particles in box
-	mass_u = 4.0,					# Helium Gas mass in atomic mass units
-	temp = 300.0,				# Initial temperature of the gas in Kelvin
-	radius = 1,						# Radius of Particles in the box
-    extent = (100, 50),				# Extent of Particles space
-	e_inner = 0.0, #TODO: Start values berechnen
-	pressure = 0.0
+	volume = [10.0, 2.0, 0.01], 						#Reale Maße des Containers
+	temp = 273.15,										# Initial temperature of the gas in Kelvin
+	temp_old = temp,									# Initial temperature of the gas in Kelvin
+	pressure_bar = 1.0,									# Initial pressure of the gas in bar
+	pressure_bar_old = pressure_bar,								# Initial pressure of the gas in bar
+	pressure_pa =  pressure_bar*1e5,									# Initial pressure of the gas in Pascal
+	n_mol = pressure_pa * volume[1] * volume[2] * volume[3] / (8.314*temp),				# Number of mol
+	init_n_mol = n_mol,
+	real_n_particles = n_mol * 6.022e23,							# Real number of Particles in box
+    n_particles = real_n_particles/1e23,				# Number of Particles in simulation box
+	mass_u = 4.0,										# Helium Gas mass in atomic mass units
+	radius = 1,											# Radius of Particles in the box
+	e_inner = 3/2 * real_n_particles * temp * 8.314,	# Inner energy of the gas
+	extent = (volume[2]*100, volume[1]*100)			# Extent of Particles space
 )
     space = ContinuousSpace(extent; spacing = radius/1.5)
 
@@ -53,7 +60,14 @@ function idealgas(;
 		:n_particles	=> n_particles,
 		:temp		=> temp,
 		:e_inner	=> e_inner,
-		:pressure	=> pressure
+		:pressure_pa	=> pressure_pa,
+		:pressure_bar	=> pressure_bar,
+		:real_n_particles	=> real_n_particles,
+		:n_mol		=> n_mol,
+		:volume	=> volume,
+		:temp_old	=> temp_old,
+		:pressure_bar_old	=> pressure_bar_old,
+		:init_n_mol	=> init_n_mol,
 	)
 
     box = ABM( Particle, space; properties, scheduler = Schedulers.Randomly())
@@ -157,8 +171,13 @@ end
 Return the temperature of the system.
 """
 function calc_temperature(model::ABM)   
-    # T = Ekin / (k * 2/3 * N ); Boltzmann constant k = 1.38e-23 
-	model.e_inner / (1.38e-23 * 3/2 * model.n_particles)
+    # T = Ekin / (k * 2/3 * N ); Boltzmann constant k = 1.38e-23
+	P = model.pressure_pa
+	R = 8.314 # Gaskonstante in J/(mol·K)
+	n = model.n_mol # Anzahl der Moleküle
+	V = model.volume[1] * model.volume[2] * model.volume[3]
+	T = (P*V)/(R*n)
+	return T
 end
 
 
@@ -170,18 +189,52 @@ end
 
 """
 function model_step!(model::ABM)
-    total_ekin = 0.0
-    for particle in allagents(model)
-        total_ekin += kinetic_energy(particle)
-    end
-	model.e_inner = total_ekin
-	model.temp = calc_temperature(model)
-	model.pressure = calc_pressure(model)
+	println("T = ", model.temp, " K")
+	println("T temp_old = ", model.temp_old, " K")
+	println("P = ", model.pressure_pa, " Pa")
+	println("P pressure_bar_old = ", model.pressure_bar_old, " Pa")
+	println("n_mol = ", model.n_mol)
+	println("real_n_particles = ", model.real_n_particles)
+	println("n_particles = ", model.n_particles)
+	print("\n")
+	if model.pressure_bar_old != model.pressure_bar
+		model.n_mol = model.init_n_mol * model.pressure_bar
+		model.real_n_particles = calc_real_n_particles(model)
+		model.n_particles = model.real_n_particles / 1e23
+		model.pressure_pa = model.pressure_bar * 1e5
+		model.temp = calc_temperature(model)
+	end
+	if model.temp != model.temp_old
+		model.pressure_pa = calc_pressure(model)
+		model.pressure_bar = model.pressure_pa / 1e5
+	end
+	model.pressure_bar_old = model.pressure_bar
+	model.temp_old = model.temp
+    model.e_inner = 3/2 * model.real_n_particles * model.temp * 8.314
 end
 
 
 #------------------------------------------------------------------------------------------
+"""
+	calc_n_mol(model)
 
+Return the number of molecules in the system.
+"""
+function calc_n_mol(model::ABM)
+	return model.pressure_bar * 1e5 * model.volume[1] * model.volume[2] * model.volume[3] / (8.314*model.temp)
+end
+
+#------------------------------------------------------------------------------------------
+"""
+	calc_real_n_particles(model)
+
+Return the number of particles in the system.
+"""
+function calc_real_n_particles(model::ABM)
+	return model.n_mol * 6.022e23
+end
+
+#------------------------------------------------------------------------------------------
 """
 	calc_pressure(box)
 
@@ -189,10 +242,9 @@ Return the pressure of the system.
 """
 function calc_pressure(model::ABM)
     R = 8.314 # Gaskonstante in J/(mol·K)
-    n = model.n_particles # Anzahl der Moleküle (angenommen, jedes Partikel repräsentiert ein Molekül)
-    V = model.space.extent[1] * model.space.extent[2] # Volumen der Box, unter der Annahme, dass sie 2D ist
-    T = calc_temperature(model) # Durchschnittstemperatur
-
+    n = model.n_mol # Anzahl der Moleküle (angenommen, jedes Partikel repräsentiert ein Molekül)
+    V = model.volume[1] * model.volume[2] * model.volume[3] # Volumen des Behälters
+    T = model.temp # Durchschnittstemperatur der Moleküle
     P = n * R * T / V
     return P
 end
@@ -208,7 +260,7 @@ Run a simulation of the IdealGas model.
 params = Dict(
 		:n_particles => 20:1:100,
 		:temp => 100.0:1.0:1000.0,
-		:pressure=> 0.0:0.1:12.0
+		:pressure_bar=> 0.0:0.1:12.0
 	)
 
 function demo()
@@ -216,8 +268,8 @@ function demo()
 
 	inner_energy(box) = box.e_inner
 	temperature(box) = box.temp
-	pressure(box) = box.pressure
-	mdata = [inner_energy, temperature, pressure]
+	pressure_bar(box) = box.pressure_bar
+	mdata = [inner_energy, temperature, pressure_bar]
 	
 	playground, = abmplayground( box, idealgas;
 	agent_step!,
