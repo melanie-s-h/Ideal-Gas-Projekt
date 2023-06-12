@@ -41,12 +41,12 @@ Create and initialise the IdealGas model.
 function idealgas(;
 	volume = [10.0, 2.0, 0.01], 						#Reale Maße des Containers
 	temp = 273.15,										# Initial temperature of the gas in Kelvin
-	temp_old = temp,									# Initial temperature of the gas in Kelvin
+	temp_old = copy(temp),									# Initial temperature of the gas in Kelvin
 	pressure_bar = 1.0,									# Initial pressure of the gas in bar
-	pressure_bar_old = pressure_bar,								# Initial pressure of the gas in bar
+	pressure_bar_old = copy(pressure_bar),								# Initial pressure of the gas in bar
 	pressure_pa =  pressure_bar*1e5,									# Initial pressure of the gas in Pascal
 	n_mol = pressure_pa * volume[1] * volume[2] * volume[3] / (8.314*temp),				# Number of mol
-	init_n_mol = n_mol,
+	init_n_mol = copy(n_mol),
 	real_n_particles = n_mol * 6.022e23,							# Real number of Particles in box
     n_particles = real_n_particles/1e23,				# Number of Particles in simulation box
 	mass_u = 4.0,										# Helium Gas mass in atomic mass units
@@ -197,22 +197,24 @@ function model_step!(model::ABM)
 	println("real_n_particles = ", model.real_n_particles)
 	println("n_particles = ", model.n_particles)
 	print("\n")
+	
 	if model.pressure_bar_old != model.pressure_bar
 		model.n_mol = model.init_n_mol * model.pressure_bar
 		model.real_n_particles = calc_real_n_particles(model)
 		model.n_particles = model.real_n_particles / 1e23
 		model.pressure_pa = model.pressure_bar * 1e5
 		model.temp = calc_temperature(model)
+		model.temp_old = copy(model.temp)
+		model.pressure_bar_old = copy(model.pressure_bar)
 	end
 	if model.temp != model.temp_old
 		model.pressure_pa = calc_pressure(model)
 		model.pressure_bar = model.pressure_pa / 1e5
+		model.temp_old = copy(model.temp)
+		model.pressure_bar_old = copy(model.pressure_bar)
 	end
-	model.pressure_bar_old = model.pressure_bar
-	model.temp_old = model.temp
     model.e_inner = 3/2 * model.real_n_particles * model.temp * 8.314
 end
-
 
 #------------------------------------------------------------------------------------------
 """
