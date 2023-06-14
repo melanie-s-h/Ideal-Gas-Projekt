@@ -10,7 +10,7 @@ module IdealGas
 
 
 include("AgentTools.jl")
-using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools
+using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools, GeometryBasics
 
 #-----------------------------------------------------------------------------------------
 # Module types:
@@ -39,6 +39,8 @@ const non_id = -1
 Create and initialise the IdealGas model.
 """
 function idealgas(;
+	gases = "helium",									# Gas types
+	selected_gas::String,
 	volume = [10.0, 2.0, 0.01], 						#Reale Maße des Containers
 	temp = 273.15,										# Initial temperature of the gas in Kelvin
 	temp_old = copy(temp),									# Initial temperature of the gas in Kelvin
@@ -68,6 +70,8 @@ function idealgas(;
 		:temp_old	=> temp_old,
 		:pressure_bar_old	=> pressure_bar_old,
 		:init_n_mol	=> init_n_mol,
+		:selected_gas	=> selected_gas,
+		:gases		=> gases
 	)
 
     box = ABM( Particle, space; properties, scheduler = Schedulers.Randomly())
@@ -190,16 +194,30 @@ end
 """
 function model_step!(model::ABM)
 	println("T = ", model.temp, " K")
-	println("T temp_old = ", model.temp_old, " K")
 	println("P = ", model.pressure_pa, " Pa")
-	println("P pressure_bar_old = ", model.pressure_bar_old, " Pa")
-	println("n_mol = ", model.n_mol)
 	println("real_n_particles = ", model.real_n_particles)
 	println("n_particles = ", model.n_particles)
 	print("\n")
 	
+
+	
+
+	model.pressure_pa = model.n_mol * 8.314 * model.temp / (model.volume[1] * model.volume[2] * model.volume[3])
+	model.pressure_bar = model.pressure_pa / 1e5
+
+	"""
+		berechne Molekülanzahl n_mol
+		berechne Druck
+		berechne Temperatur
+	"""
+	#TODO: calc n_mol, pressure_pa, temp
+
+	
+	"""
 	if model.pressure_bar_old != model.pressure_bar
-		model.n_mol = model.init_n_mol * model.pressure_bar
+		model.n_mol = model.n_mol * (model.pressure_bar / model.pressure_bar_old)
+		model.pressure_pa = model.pressure_bar * 1e5
+		temp_new = model.pressure_pa  * model.volume[1] * model.volume[2] * model.volume[3] / (model.n_mol * 8.314)
 		model.real_n_particles = calc_real_n_particles(model)
 		model.n_particles = model.real_n_particles / 1e23
 		model.pressure_pa = model.pressure_bar * 1e5
@@ -207,13 +225,14 @@ function model_step!(model::ABM)
 		model.temp_old = copy(model.temp)
 		model.pressure_bar_old = copy(model.pressure_bar)
 	end
-	if model.temp != model.temp_old
+	#if model.temp != model.temp_old
 		model.pressure_pa = calc_pressure(model)
 		model.pressure_bar = model.pressure_pa / 1e5
 		model.temp_old = copy(model.temp)
 		model.pressure_bar_old = copy(model.pressure_bar)
-	end
+	#end
     model.e_inner = 3/2 * model.real_n_particles * model.temp * 8.314
+	"""
 end
 
 #------------------------------------------------------------------------------------------
@@ -262,11 +281,14 @@ Run a simulation of the IdealGas model.
 params = Dict(
 		:n_particles => 20:1:100,
 		:temp => 100.0:1.0:1000.0,
-		:pressure_bar=> 0.0:0.1:12.0
 	)
 
 function demo()
 	box = idealgas()
+
+	on(menu.selection) do selected_item
+		box.selected_item = selected_item
+	end
 
 	inner_energy(box) = box.e_inner
 	temperature(box) = box.temp

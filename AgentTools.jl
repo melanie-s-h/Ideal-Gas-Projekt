@@ -183,8 +183,8 @@ Original source code of button initialisation at GitHub: shorturl.at/biOX3
 
 Author: Nick Diercksen.
 """
-function abmplayground( model, initialiser; kwargs...)
-	playgrnd_fig,abmobs = abmexploration( model; kwargs...)
+function abmplayground(model, initialiser; kwargs...)
+	playgrnd_fig,abmobs = abmexploration(model; kwargs...)
 
 	# Retrieve the Reset button from fig.content[10]:
 	reset_btn = nothing
@@ -196,8 +196,29 @@ function abmplayground( model, initialiser; kwargs...)
 	end
 	@assert !isnothing(reset_btn) "Couldn't find the 'Reset-model-button'!"
 
+	label = Label(playgrnd_fig[1,1], "Test")
+	# Add a dropdown menu
+	playgrnd_fig[3,2] = label
+	menu = Menu(playgrnd_fig[1,1], options = ["first", "second", "third"], default = "second")
+	for key, value in kwargs.items()
+		if key == "gases"
+			menu.options = value
+			break
+		end
+	end
+
+	menu = Menu(playgrnd_fig[1,1], options = ["first", "second", "third"], default = "second")
+	# Place the menu at a suitable place in your figure/grid
+	playgrnd_fig[3,1] = menu
+
+	# Define the action on menu selection
+	on(menu.selection) do selected_item
+		println("Selected item: $selected_item")
+		# You can put any action you want based on the selected_item here
+	end
+
 	on(reset_btn.clicks) do _
-		# Retrieve all keyword agruments from the initialiser function
+		# Retrieve all keyword arguments from the initialiser function
 		# (https://discourse.julialang.org/t/get-the-argument-names-of-an-function/32902/4):
 		init_kwargs = Base.kwarg_decl(@which initialiser())
 
@@ -210,7 +231,8 @@ function abmplayground( model, initialiser; kwargs...)
 		abmobs.model[] = initialiser(; kws...)
 	end
 
-	(playgrnd_fig,abmobs)
+	(playgrnd_fig,abmobs, menu)
 end
+
 
 end # ... of module AgentTools
