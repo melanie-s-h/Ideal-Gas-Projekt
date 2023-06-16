@@ -10,7 +10,7 @@ module IdealGas
 
 
 include("AgentTools.jl")
-using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools
+using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools, GeometryBasics, Observables
 
 #-----------------------------------------------------------------------------------------
 # Module types:
@@ -39,22 +39,26 @@ const non_id = -1
 Create and initialise the IdealGas model.
 """
 function idealgas(;
-	volume = [10.0, 2.0, 0.01], 						#Reale Maße des Containers
-	temp = 273.15,										# Initial temperature of the gas in Kelvin
-	temp_old = copy(temp),									# Initial temperature of the gas in Kelvin
-	pressure_bar = 1.0,									# Initial pressure of the gas in bar
-	pressure_bar_old = copy(pressure_bar),								# Initial pressure of the gas in bar
-	pressure_pa =  pressure_bar*1e5,									# Initial pressure of the gas in Pascal
+	gases = Dict("Helium" => 4.0, "Hydrogen" => 1.0, "Oxygen" => 32.0),					# Gas types
+	volumes = Dict("Gasflasche" => [10.0, 2.0, 0.01], "Gastank" => [30, 100, 0.01]),	# Volume of containers
+	volume = [10.0, 2.0, 0.01], 														# Reale Maße des Containers
+	temp = 273.15,																		# Initial temperature of the gas in Kelvin
+	temp_old = copy(temp),																# Initial temperature of the gas in Kelvin
+	pressure_bar = 1.0,																	# Initial pressure of the gas in bar
+	pressure_bar_old = copy(pressure_bar),												# Initial pressure of the gas in bar
+	pressure_pa =  pressure_bar*1e5,													# Initial pressure of the gas in Pascal
 	n_mol = pressure_pa * volume[1] * volume[2] * volume[3] / (8.314*temp),				# Number of mol
-	init_n_mol = copy(n_mol),
-	real_n_particles = n_mol * 6.022e23,							# Real number of Particles in box
-    n_particles = real_n_particles/1e23,				# Number of Particles in simulation box
-	mass_u = 4.0,										# Helium Gas mass in atomic mass units
-	radius = 1,											# Radius of Particles in the box
-	e_inner = 3/2 * real_n_particles * temp * 8.314,	# Inner energy of the gas
-	extent = (volume[2]*100, volume[1]*100)			# Extent of Particles space
+	init_n_mol = copy(n_mol), 															# Initial number of mol
+	real_n_particles = n_mol * 6.022e23,												# Real number of Particles in box
+    n_particles = real_n_particles/1e23,												# Number of Particles in simulation box
+	molare_masse = 4.0,																		# Helium Gas mass in atomic mass units
+	mass_kg = molare_masse * 1.66053906660e-27,												# Convert atomic/molecular mass to kg
+	mass_gas = round(n_mol * molare_masse, digits=3),								# Mass of gas
+	radius = 20.0,																			# Radius of Particles in the box
+	e_inner = 3/2 * real_n_particles * temp * 8.314,									# Inner energy of the gas
+	extent = (volume[2]*300.0, volume[1]*100.0),												# Extent of Particles space
 )
-    space = ContinuousSpace(extent; spacing = radius/1.5)
+    space = ContinuousSpace(extent; spacing = 2.5)
 
 	properties = Dict(
 		:n_particles	=> n_particles,
@@ -68,18 +72,22 @@ function idealgas(;
 		:temp_old	=> temp_old,
 		:pressure_bar_old	=> pressure_bar_old,
 		:init_n_mol	=> init_n_mol,
+		:gases		=> gases,
+		:molare_masse		=> molare_masse,
+		:mass_kg		=> mass_kg,
+		:volumes	=> volumes,
+		:mass_gas	=> mass_gas,
 	)
 
     box = ABM( Particle, space; properties, scheduler = Schedulers.Randomly())
 
-    k = 1.38e-23  # Boltzmann constant in J/K
-	mass_kg = mass_u * 1.66053906660e-27  # Convert atomic/molecular mass to kg
-	max_speed = 1000.0  # Maximum speed in m/s
+    k = 1.38e-23  									# Boltzmann constant in J/K
+	max_speed = 1000.0  							# Maximum speed in m/s
 	for _ in 1:n_particles
 		vel = Tuple( 2rand(2).-1)
-		vel = vel ./ norm(vel)  # ALWAYS maintain normalised state of vel!
+		vel = vel ./ norm(vel)  					# ALWAYS maintain normalised state of vel!
 		speed = sqrt((3 * k * box.temp) / mass_kg)  # Initial speed based on temperature
-		speed = scale_speed(speed, max_speed)  # Scale speed to avoid excessive velocities
+		speed = scale_speed(speed, max_speed)  		# Scale speed to avoid excessive velocities
         add_agent!( box, vel, mass_kg, speed, radius, non_id)
 	end
 
@@ -94,41 +102,34 @@ This is the heart of the IdealGas model: It calculates how Particles collide wit
 while conserving momentum and kinetic energy.
 """
 function agent_step!(me::Particle, box::ABM)
-	her = random_nearby_agent( me, box, 2*me.radius)	# Grab nearby particle
-	if her === nothing
-		# No new partners - forget previous collision partner:
-		me.prev_partner = non_id
-	elseif her.id < me.id && her.id != me.prev_partner
-		# New collision partner has not already been handled and is not my previous partner:
-		me.prev_partner = her.id							# Update previous partners to avoid
-		her.prev_partner = me.id							# repetitive juddering collisions.
-		cntct = (x->[cos(x),sin(x)])(2rand()pi)				# Unit vector to contact point with partner
-		Rctct = [cntct[1] cntct[2]; -cntct[2] cntct[1]]		# Rotation into contact directn coords
-		Rback = [cntct[1] -cntct[2]; cntct[2] cntct[1]]		# Inverse rotation back to world coords
+    her = random_nearby_agent(me, box, 2*me.radius)   # Grab nearby particle
+    
+    if her !== nothing && her.id < me.id && her.id != me.prev_partner
+        # New collision partner has not already been handled and is not my previous partner:
+        me.prev_partner = her.id           # Update previous partners to avoid repetitive juddering collisions.
+        her.prev_partner = me.id           # ditto for the other agent.
 
-		# Rotate velocities into coordinates directed ALONG and PERPendicular to contact direction:
-		myAlongVel, myPerpVel = me.speed * Rctct * collect(me.vel)					# My velocity
-		herAlongVel, herPerpVel = her.speed * Rctct * collect(her.vel)				# Her velocity
-		cmAlongVel = (me.mass*myAlongVel + her.mass*herAlongVel)/(me.mass+her.mass)	# C of M velocity
+        # Compute relative position and velocity:
+        rel_pos = me.pos .- her.pos
+        rel_vel = me.vel .- her.vel
 
-		# Calculate collision effects along contact direction (perp direction is unaffected):
-		myAlongVel = 2cmAlongVel - myAlongVel
-		herAlongVel = 2cmAlongVel - herAlongVel
+        # Compute collision impact vector:
+        distance_sq = sum(rel_pos .^ 2)
+        velocity_dot = sum(rel_vel .* rel_pos)
+        impulse = 2 * me.mass * her.mass / (me.mass + her.mass) * velocity_dot ./ distance_sq .* rel_pos
 
-		# Rotate collision effects on both me and her back into world coordinates:
-		me.speed = hypot(myAlongVel,myPerpVel)
-		if me.speed != 0.0
-			me.vel = Tuple(Rback*[myAlongVel,myPerpVel])
-			me.vel = me.vel ./ norm(me.vel)
-		end
-		her.speed = hypot(herAlongVel,herPerpVel)
-		if her.speed != 0.0
-			her.vel = Tuple(Rback*[herAlongVel,herPerpVel])
-			her.vel = her.vel ./ norm(her.vel)
-		end
-	end
-	move_agent!(me, box, me.speed)
+        # Update velocities according to the impulse
+		me.vel = (me.vel[1] - (impulse ./ me.mass)[1], me.vel[2] - (impulse ./ me.mass)[2])
+		her.vel = (her.vel[1] + (impulse ./ her.mass)[1], her.vel[2] + (impulse ./ her.mass)[2])
+
+        # Update speeds based on new velocities
+        me.speed = norm(me.vel)
+        her.speed = norm(her.vel)
+    end
+
+    move_agent!(me, box, me.speed)
 end
+
 
 #-----------------------------------------------------------------------------------------
 """
@@ -189,31 +190,33 @@ end
 
 """
 function model_step!(model::ABM)
+	"""
 	println("T = ", model.temp, " K")
-	println("T temp_old = ", model.temp_old, " K")
 	println("P = ", model.pressure_pa, " Pa")
-	println("P pressure_bar_old = ", model.pressure_bar_old, " Pa")
-	println("n_mol = ", model.n_mol)
 	println("real_n_particles = ", model.real_n_particles)
 	println("n_particles = ", model.n_particles)
 	print("\n")
-	
-	if model.pressure_bar_old != model.pressure_bar
-		model.n_mol = model.init_n_mol * model.pressure_bar
-		model.real_n_particles = calc_real_n_particles(model)
-		model.n_particles = model.real_n_particles / 1e23
-		model.pressure_pa = model.pressure_bar * 1e5
-		model.temp = calc_temperature(model)
-		model.temp_old = copy(model.temp)
-		model.pressure_bar_old = copy(model.pressure_bar)
-	end
-	if model.temp != model.temp_old
-		model.pressure_pa = calc_pressure(model)
-		model.pressure_bar = model.pressure_pa / 1e5
-		model.temp_old = copy(model.temp)
-		model.pressure_bar_old = copy(model.pressure_bar)
-	end
-    model.e_inner = 3/2 * model.real_n_particles * model.temp * 8.314
+	println(model.molare_masse)
+	println("volume: ", model.volume)
+	println("molare_masse: ", model.molare_masse, " g/mol")
+	println("mass_kg: ", model.mass_kg, " kg")
+	"""
+
+	pressure_pa = model.n_mol * 8.314 * model.temp / (model.volume[1] * model.volume[2] * model.volume[3])
+	model.pressure_pa = round(pressure_pa, digits=3)
+	model.pressure_bar = round(model.pressure_pa / 1e5, digits=3)
+
+	"""
+	println("pressure_pa: " , model.pressure_pa, " Pa")
+	println("pressure_bar: ", model.pressure_bar, " Bar")
+	println("n_mol: ", model.n_mol, " mol")
+	println("mass_gas: ", model.mass_gas, " g")
+	println("\n")
+	println("\n")
+	"""
+
+    #model.e_inner = 3/2 * model.real_n_particles * model.temp * 8.314
+
 end
 
 #------------------------------------------------------------------------------------------
@@ -260,27 +263,67 @@ Run a simulation of the IdealGas model.
 """
 
 params = Dict(
-		:n_particles => 20:1:100,
 		:temp => 100.0:1.0:1000.0,
-		:pressure_bar=> 0.0:0.1:12.0
 	)
 
-function demo()
-	box = idealgas()
-
-	inner_energy(box) = box.e_inner
-	temperature(box) = box.temp
-	pressure_bar(box) = box.pressure_bar
-	mdata = [inner_energy, temperature, pressure_bar]
+	function demo()
+		box = idealgas()
 	
-	playground, = abmplayground( box, idealgas;
-	agent_step!,
-	model_step!,
-	mdata,
-	params
-)
+		inner_energy(box) = box.e_inner
+		temperature(box) = box.temp
+		pressure_bar(box) = box.pressure_bar
+		mdata = [inner_energy, temperature, pressure_bar]
+	
+		playground,abmobs = abmplayground( box, idealgas;
+			agent_step!,
+			model_step!,
+			mdata,
+			params,
+			figure = (; resolution = (1600, 800)),
+			ac = :red,
+			as = 20.0
+		)
+		
+		grid_layout = playground[3,1] = GridLayout()
 
-	playground 
-end
+		count_layout = grid_layout[1,1] = GridLayout()
+
+		gas_dropdown = Menu(count_layout[1,1], options = keys(box.gases), default = "Helium")
+		volume_dropdown = Menu(count_layout[2,1], options = keys(box.volumes), default = "Gasflasche")
+		#volume_slider = SliderGrid(playground[1,1], (label = "Höhe: ", range = 0/50:0.1:10.0, startvalue=10.0))
+		#playground[5,1] = volume_slider
+		pressure_label = Label(count_layout[1,2], "Druck: " * string(pressure_bar(box))* " Bar")
+		mass_label = Label(count_layout[2,2], "Masse: " * string(box.mass_gas)* " g")
+		volume_label = Label(count_layout[3,2], "Volumen: " * string(box.volume[1] * box.volume[2] * box.volume[3])* " m^3 ; " * string(box.volume[1] * box.volume[2] * box.volume[3] * 1000) * " L")
+
+		on(abmobs.model) do _
+
+			pressure_label.text[] = string("Druck: ", string(box.pressure_bar), " Bar")
+			if box.mass_gas > 999.9
+				mass_label.text[] = string("Masse: ", string(round(box.mass_gas/1000, digits=3), " kg"))
+			else
+				mass_label.text[] = string("Masse: ", string(box.mass_gas), " g")
+			end
+			volume_label.text[] = string("Volumen: ", string(box.volume[1] * box.volume[2] * box.volume[3]), " m^3 ; " * string(box.volume[1] * box.volume[2] * box.volume[3] * 1000) * " L")
+		end
+
+		on(gas_dropdown.selection) do selected_gas
+			new_molare_masse = box.gases[selected_gas]
+			box.molare_masse = new_molare_masse
+			box.mass_kg = new_molare_masse * 1.66054e-27
+			box.mass_gas = round(box.n_mol * box.molare_masse, digits=3)
+			
+		end
+
+		on(volume_dropdown.selection) do selected_volume
+			new_volume = box.volumes[selected_volume]
+			box.volume = new_volume
+			box.n_mol = box.pressure_pa * box.volume[1] * box.volume[2] * box.volume[3] / (8.314*box.temp)
+			box.mass_gas = round(box.n_mol * box.molare_masse, digits=3)
+		
+			
+		end
+		playground
+	end
 
 end	# of module IdealGas

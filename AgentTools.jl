@@ -183,8 +183,8 @@ Original source code of button initialisation at GitHub: shorturl.at/biOX3
 
 Author: Nick Diercksen.
 """
-function abmplayground( model, initialiser; kwargs...)
-	playgrnd_fig,abmobs = abmexploration( model; kwargs...)
+function abmplayground(model, initialiser; kwargs...)
+	playgrnd_fig,abmobs = abmexploration(model; kwargs...)
 
 	# Retrieve the Reset button from fig.content[10]:
 	reset_btn = nothing
@@ -196,8 +196,9 @@ function abmplayground( model, initialiser; kwargs...)
 	end
 	@assert !isnothing(reset_btn) "Couldn't find the 'Reset-model-button'!"
 
+
 	on(reset_btn.clicks) do _
-		# Retrieve all keyword agruments from the initialiser function
+		# Retrieve all keyword arguments from the initialiser function
 		# (https://discourse.julialang.org/t/get-the-argument-names-of-an-function/32902/4):
 		init_kwargs = Base.kwarg_decl(@which initialiser())
 
@@ -212,5 +213,6 @@ function abmplayground( model, initialiser; kwargs...)
 
 	(playgrnd_fig,abmobs)
 end
+
 
 end # ... of module AgentTools
