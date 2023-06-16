@@ -196,26 +196,6 @@ function abmplayground(model, initialiser; kwargs...)
 	end
 	@assert !isnothing(reset_btn) "Couldn't find the 'Reset-model-button'!"
 
-	label = Label(playgrnd_fig[1,1], "Test")
-	# Add a dropdown menu
-	playgrnd_fig[3,2] = label
-	menu = Menu(playgrnd_fig[1,1], options = ["first", "second", "third"], default = "second")
-	for key, value in kwargs.items()
-		if key == "gases"
-			menu.options = value
-			break
-		end
-	end
-
-	menu = Menu(playgrnd_fig[1,1], options = ["first", "second", "third"], default = "second")
-	# Place the menu at a suitable place in your figure/grid
-	playgrnd_fig[3,1] = menu
-
-	# Define the action on menu selection
-	on(menu.selection) do selected_item
-		println("Selected item: $selected_item")
-		# You can put any action you want based on the selected_item here
-	end
 
 	on(reset_btn.clicks) do _
 		# Retrieve all keyword arguments from the initialiser function
@@ -231,7 +211,7 @@ function abmplayground(model, initialiser; kwargs...)
 		abmobs.model[] = initialiser(; kws...)
 	end
 
-	(playgrnd_fig,abmobs, menu)
+	(playgrnd_fig,abmobs)
 end
 
 
