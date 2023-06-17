@@ -56,6 +56,7 @@ function idealgas(;
 	mass_gas = round(n_mol * molare_masse, digits=3),								# Mass of gas
 	radius = 20.0,																			# Radius of Particles in the box
 	e_inner = 3/2 * real_n_particles * temp * 8.314,									# Inner energy of the gas
+	entropy = 0.0,
 	extent = (volume[2]*300.0, volume[1]*100.0),												# Extent of Particles space
 )
     space = ContinuousSpace(extent; spacing = 2.5)
@@ -64,6 +65,7 @@ function idealgas(;
 		:n_particles	=> n_particles,
 		:temp		=> temp,
 		:e_inner	=> e_inner,
+		:entropy 	=> entropy,
 		:pressure_pa	=> pressure_pa,
 		:pressure_bar	=> pressure_bar,
 		:real_n_particles	=> real_n_particles,
@@ -77,6 +79,9 @@ function idealgas(;
 		:mass_kg		=> mass_kg,
 		:volumes	=> volumes,
 		:mass_gas	=> mass_gas,
+
+		##
+		:placeholder => 0.0,
 	)
 
     box = ABM( Particle, space; properties, scheduler = Schedulers.Randomly())
@@ -214,6 +219,7 @@ function model_step!(model::ABM)
 	println("\n")
 	println("\n")
 	"""
+	model.entropy = 0.0
 
     #model.e_inner = 3/2 * model.real_n_particles * model.temp * 8.314
 
@@ -264,37 +270,58 @@ Run a simulation of the IdealGas model.
 
 params = Dict(
 		:temp => 100.0:1.0:1000.0,
+		:placeholder => 0:1:10,
 	)
 
 	function demo()
 		box = idealgas()
 	
-		inner_energy(box) = box.e_inner
-		temperature(box) = box.temp
-		pressure_bar(box) = box.pressure_bar
-		mdata = [inner_energy, temperature, pressure_bar]
+		entropy(box) = box.entropy
+		mdata = [entropy]
+		mlabels = ["Entropie(Platzhalter)"]
 	
 		playground,abmobs = abmplayground( box, idealgas;
 			agent_step!,
 			model_step!,
 			mdata,
+			mlabels,
 			params,
-			figure = (; resolution = (1600, 800)),
-			ac = :red,
+			figure = (; resolution = (1300, 750)),
+			ac = :skyblue3,
 			as = 20.0
 		)
-		
-		grid_layout = playground[3,1] = GridLayout()
+		# Figure Objekten neues Layout zuweisen durch feste Reihenfolge in figure.content[i]
+		model_plot = playground.content[1]	# Box 	
+		playground[0:2,0] = model_plot
+		entropy_plot = playground.content[9]
+		playground[0:1,2][1,0:1] = entropy_plot
+		# Sliders
+		playground[2,1] = playground.content[2]
+		playground[2,2] = playground.content[7]
+		# Buttons
+		gl_buttons = playground[3,1] = GridLayout()
+		gl_buttons[0,2] = playground.content[3]
+		gl_buttons[0,3] = playground.content[4]
+		gl_buttons[0,4] = playground.content[5]
+		gl_buttons[0,5] = playground.content[6]
+		playground[3,1][0,8] = playground.content[8]	# Update Button	
 
-		count_layout = grid_layout[1,1] = GridLayout()
-
-		gas_dropdown = Menu(count_layout[1,1], options = keys(box.gases), default = "Helium")
-		volume_dropdown = Menu(count_layout[2,1], options = keys(box.volumes), default = "Gasflasche")
+		# grid_layout = playground[3,1] = GridLayout()
+		# count_layout = grid_layout[1,1] = GridLayout()
+		gl_dropdowns = playground[3,0] = GridLayout()
+		gl_labels = playground[0,1] = GridLayout()
+		# gas_dropdown = Menu(count_layout[1,1], options = keys(box.gases), default = "Helium")
+		gas_dropdown = Menu(gl_dropdowns[0,0], options = keys(box.gases), default = "Helium")
+		# volume_dropdown = Menu(count_layout[2,1], options = keys(box.volumes), default = "Gasflasche")
+		volume_dropdown = Menu(gl_dropdowns[0,1], options = keys(box.volumes), default = "Gasflasche")
 		#volume_slider = SliderGrid(playground[1,1], (label = "Höhe: ", range = 0/50:0.1:10.0, startvalue=10.0))
 		#playground[5,1] = volume_slider
-		pressure_label = Label(count_layout[1,2], "Druck: " * string(pressure_bar(box))* " Bar")
-		mass_label = Label(count_layout[2,2], "Masse: " * string(box.mass_gas)* " g")
-		volume_label = Label(count_layout[3,2], "Volumen: " * string(box.volume[1] * box.volume[2] * box.volume[3])* " m^3 ; " * string(box.volume[1] * box.volume[2] * box.volume[3] * 1000) * " L")
+		pressure_label = Label(gl_labels[2,0], "Druck: " * string(box.pressure_bar)* " Bar", fontsize=22)
+		mass_label = Label(gl_labels[3,0], "Masse: " * string(box.mass_gas)* " g", fontsize=22)
+		volume_label = Label(gl_labels[1,0], "Volumen: " * string(box.volume[1] * box.volume[2] * box.volume[3])* " m³ ; " * string(box.volume[1] * box.volume[2] * box.volume[3] * 1000) * " L", fontsize=22)
+		# Platzhalter Label
+		Label(gl_labels[4,0], "Platzhalter: 0.0 ", fontsize=22)
+		Label(gl_labels[5,0], "Platzhalter: 0.0 ", fontsize=22)
 
 		on(abmobs.model) do _
 
@@ -304,7 +331,7 @@ params = Dict(
 			else
 				mass_label.text[] = string("Masse: ", string(box.mass_gas), " g")
 			end
-			volume_label.text[] = string("Volumen: ", string(box.volume[1] * box.volume[2] * box.volume[3]), " m^3 ; " * string(box.volume[1] * box.volume[2] * box.volume[3] * 1000) * " L")
+			volume_label.text[] = string("Volumen: ", string(box.volume[1] * box.volume[2] * box.volume[3]), " m³ ; " * string(box.volume[1] * box.volume[2] * box.volume[3] * 1000) * " L")
 		end
 
 		on(gas_dropdown.selection) do selected_gas
