@@ -41,11 +41,9 @@ Create and initialise the IdealGas model.
 """
 function idealgas(;
 	gases = Dict("Helium" => 4.0, "Hydrogen" => 1.0, "Oxygen" => 32.0),					# Gas types
-	#volumes = Dict("Gasflasche" => [10.0, 2.0, 0.01], "Gastank" => [30, 100, 0.01]),	# Volume of containers
-	total_volume = 5.0,
-	#volume = calc_total_vol_dimension(total_volume), 														# Reale Maße des Containers
-	obereGrenze = total_volume/5.0,		
-	volume = [obereGrenze, 5.0, 1.0], 													#Todo:Change Name 
+	total_volume = 5.0,																	# Initial volume of the container
+	volume = calc_total_vol_dimension(total_volume), 									# Dimensions of the container
+	topBorder = total_volume/5.0,									
 	temp = 273.15,																		# Initial temperature of the gas in Kelvin
 	temp_old = copy(temp),																# Initial temperature of the gas in Kelvin
 	pressure_bar = 1.0,																	# Initial pressure of the gas in bar
@@ -85,7 +83,7 @@ function idealgas(;
 		:molare_masse		=> molare_masse,
 		:mass_kg		=> mass_kg,
 		:mass_gas	=> mass_gas,
-		:obereGrenze => obereGrenze, #ChangeName
+		:topBorder => topBorder, #ChangeName
 	)
 
 
@@ -113,11 +111,10 @@ calc_total_vol_dimension( me, box)
 
 Calculates volume/dimension of a 3D-Space with [x, y=5, z=1], based on a given value of total volume.
 """
-# function calc_total_vol_dimension(volume, x_axis_vol=5.0)
-# 	print(volume)
-# 	y_axis_vol = volume/x_axis_vol
-# 	return [y_axis_vol, x_axis_vol, 1.0] 
-# end
+function calc_total_vol_dimension(volume, x_axis_vol=5.0)
+ 	y_axis_vol = volume/x_axis_vol
+ 	return [y_axis_vol, x_axis_vol, 1.0] 
+end
 #-----------------------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------------------
@@ -161,64 +158,8 @@ function agent_step!(me::Particle, box::ABM)
 			her.vel = her.vel ./ norm(her.vel)
 		end
 	end
-
-	print(box.obereGrenze)
 	move_agent!(me, box, me.speed)
 end
-
-
-# #-----------------------------------------------------------------------------------------
-# """
-# 	momentum( particle)
-
-# Return the momentum of this particle.
-# """
-# function momentum(particle)
-# 	particle.mass * particle.speed * collect(particle.vel)
-# end
-
-# #-----------------------------------------------------------------------------------------
-# """
-# 	kinetic_energy( particle)
-
-# Return the kinetic energy of this particle.
-# """
-# function kinetic_energy(particle)
-# 	particle.mass * particle.speed^2 / 2
-# end
-
-# #-----------------------------------------------------------------------------------------
-# """
-# 	scale_speed(speed, max_speed)
-
-# Scales a speed value to the interval [0,1] based on the provided max_speed.
-# """
-# function scale_speed(speed, max_speed)
-#  	if speed > max_speed
-#  		speed = max_speed
-#  	end
-#      return speed / max_speed
-# end
-
-# #-----------------------------------------------------------------------------------------
-
-# """
-# 	calc_temperature
-
-# Return the temperature of the system.
-# """
-# function calc_temperature(model::ABM)   
-#     # T = Ekin / (k * 2/3 * N ); Boltzmann constant k = 1.38e-23
-# 	P = model.pressure_pa
-# 	R = 8.314 # Gaskonstante in J/(mol·K)
-# 	n = model.n_mol # Anzahl der Moleküle
-# 	V = model.volume[1] * model.volume[2] * model.volume[3]
-# 	T = (P*V)/(R*n)
-# 	return T
-# end
-
-
-
 #-----------------------------------------------------------------------------------------
 """
 	model_step!( model)
@@ -237,7 +178,7 @@ function model_step!(model::ABM)
 	println("molare_masse: ", model.molare_masse, " g/mol")
 	println("mass_kg: ", model.mass_kg, " kg")
 	"""
-	model.obereGrenze = model.total_volume/5.0 #TODO: Change 
+	model.topBorder = model.total_volume/5.0
 	pressure_pa = model.n_mol * 8.314 * model.temp / (model.volume[1] * model.volume[2] * model.volume[3])
 	model.pressure_pa = round(pressure_pa, digits=3)
 	model.pressure_bar = round(model.pressure_pa / 1e5, digits=3)
@@ -255,41 +196,6 @@ function model_step!(model::ABM)
     #model.e_inner = 3/2 * model.real_n_particles * model.temp * 8.314
 
 end
-
-# #------------------------------------------------------------------------------------------
-# """
-# 	calc_n_mol(model)
-
-# Return the number of molecules in the system.
-# """
-# function calc_n_mol(model::ABM)
-# 	return model.pressure_bar * 1e5 * model.volume[1] * model.volume[2] * model.volume[3] / (8.314*model.temp)
-# end
-
-# #------------------------------------------------------------------------------------------
-# """
-# 	calc_real_n_particles(model)
-
-# Return the number of particles in the system.
-# """
-# function calc_real_n_particles(model::ABM)
-# 	return model.n_mol * 6.022e23
-# end
-
-# #------------------------------------------------------------------------------------------
-# """
-# 	calc_pressure(box)
-
-# Return the pressure of the system.
-# """
-# function calc_pressure(model::ABM)
-#     R = 8.314 # Gaskonstante in J/(mol·K)
-#     n = model.n_mol # Anzahl der Moleküle (angenommen, jedes Partikel repräsentiert ein Molekül)
-#     V = model.volume[1] * model.volume[2] * model.volume[3] # Volumen des Behälters
-#     T = model.temp # Durchschnittstemperatur der Moleküle
-#     P = n * R * T / V
-#     return P
-# end
 
 #----------------------------------------------------------------------------------------
 
