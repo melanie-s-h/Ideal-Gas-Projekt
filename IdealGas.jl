@@ -61,13 +61,13 @@ function idealgas(;
 	entropy = 0.0,
 	extent = (volume[2]*100.0, volume[1]*300.0),												# Extent of Particles space
 	
-	init_n_mol = copy(n_mol),
-	real_n_particles = n_mol * 6.022e23,							# Real number of Particles in box
-    n_particles = real_n_particles/1e23,				# Number of Particles in simulation box
-	mass_u = 4.0,										# Helium Gas mass in atomic mass units
-	radius = 1,											# Radius of Particles in the box
-	e_inner = 3/2 * real_n_particles * temp * 8.314,	# Inner energy of the gas
-	extent = (volume[2]*100, volume[1]*100)			# Extent of Particles space
+	# init_n_mol = copy(n_mol),
+	# real_n_particles = n_mol * 6.022e23,							# Real number of Particles in box
+    # n_particles = real_n_particles/1e23,				# Number of Particles in simulation box
+	# mass_u = 4.0,										# Helium Gas mass in atomic mass units
+	# radius = 1,											# Radius of Particles in the box
+	# e_inner = 3/2 * real_n_particles * temp * 8.314,	# Inner energy of the gas
+	# extent = (volume[2]*100, volume[1]*100)			# Extent of Particles space
 )
     space = ContinuousSpace(extent; spacing = radius/1.5)
 
