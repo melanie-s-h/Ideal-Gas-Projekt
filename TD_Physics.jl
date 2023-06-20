@@ -14,6 +14,15 @@ using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, GeometryBasics, Obser
 
 #-----------------------------------------------------------------------------------------
 """
+	momentum( particle)
+
+Return the momentum of this particle.
+"""
+function momentum(particle)
+	particle.mass * particle.speed * collect(particle.vel)
+end
+#-----------------------------------------------------------------------------------------
+"""
 	kinetic_energy( particle)
 
 Return the kinetic energy of this particle.

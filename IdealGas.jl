@@ -42,8 +42,10 @@ Create and initialise the IdealGas model.
 function idealgas(;
 	gases = Dict("Helium" => 4.0, "Hydrogen" => 1.0, "Oxygen" => 32.0),					# Gas types
 	#volumes = Dict("Gasflasche" => [10.0, 2.0, 0.01], "Gastank" => [30, 100, 0.01]),	# Volume of containers
-	total_volume = 10.0,
-	volume = calc_total_vol_dimension(total_volume), 														# Reale Maße des Containers
+	total_volume = 5.0,
+	#volume = calc_total_vol_dimension(total_volume), 														# Reale Maße des Containers
+	obereGrenze = total_volume/5.0,		
+	volume = [obereGrenze, 5.0, 1.0], 													#Todo:Change Name 
 	temp = 273.15,																		# Initial temperature of the gas in Kelvin
 	temp_old = copy(temp),																# Initial temperature of the gas in Kelvin
 	pressure_bar = 1.0,																	# Initial pressure of the gas in bar
@@ -54,28 +56,23 @@ function idealgas(;
 	real_n_particles = n_mol * 6.022e23/50,												# Real number of Particles in box: Reduction for simplicity
     n_particles = real_n_particles/1e23,												# Number of Particles in simulation box
 	molare_masse = 4.0,																		# Helium Gas mass in atomic mass units
+	mass_u = 4.0,										# Helium Gas mass in atomic mass units
 	mass_kg = molare_masse * 1.66053906660e-27,												# Convert atomic/molecular mass to kg
 	mass_gas = round(n_mol * molare_masse, digits=3),								# Mass of gas
-	radius = 20.0,																			# Radius of Particles in the box
+	radius = 4.0,																			# Radius of Particles in the box
 	e_inner = 3/2 * real_n_particles * temp * 8.314,									# Inner energy of the gas
 	entropy = 0.0,
-	extent = (volume[2]*100.0, volume[1]*300.0),												# Extent of Particles space
+	extent = (volume[2]*100, volume[1]*300),												# Extent of Particles space
 	
-	# init_n_mol = copy(n_mol),
-	# real_n_particles = n_mol * 6.022e23,							# Real number of Particles in box
-    # n_particles = real_n_particles/1e23,				# Number of Particles in simulation box
-	# mass_u = 4.0,										# Helium Gas mass in atomic mass units
-	# radius = 1,											# Radius of Particles in the box
-	# e_inner = 3/2 * real_n_particles * temp * 8.314,	# Inner energy of the gas
-	# extent = (volume[2]*100, volume[1]*100)			# Extent of Particles space
 )
-    space = ContinuousSpace(extent; spacing = radius/1.5)
+    space = ContinuousSpace(extent; spacing = radius/2.0)
 
 	properties = Dict(
 		:n_particles	=> n_particles,
 		:temp		=> temp,
 		:total_volume	=> total_volume,
 		:e_inner	=> e_inner,
+		:entropy 	=> entropy,
 		:pressure_pa	=> pressure_pa,
 		:pressure_bar	=> pressure_bar,
 		:real_n_particles	=> real_n_particles,
@@ -87,12 +84,10 @@ function idealgas(;
 		:gases		=> gases,
 		:molare_masse		=> molare_masse,
 		:mass_kg		=> mass_kg,
-		#:volumes	=> volumes,
 		:mass_gas	=> mass_gas,
-
-		##
-		#:placeholder => 0.0,
+		:obereGrenze => obereGrenze, #ChangeName
 	)
+
 
     box = ABM( Particle, space; properties, scheduler = Schedulers.Randomly())
 
@@ -104,6 +99,7 @@ function idealgas(;
 		vel = vel ./ norm(vel)  # ALWAYS maintain normalised state of vel!
 		speed = sqrt((3 * k * box.temp) / mass_kg)  # Initial speed based on temperature
 		speed = TD_Physics.scale_speed(speed, max_speed)  		# Scale speed to avoid excessive velocities
+		#speed = scale_speed(speed, max_speed)  		# Scale speed to avoid excessive velocities
         add_agent!( box, vel, mass_kg, speed, radius, non_id)
 	end
 
@@ -117,12 +113,11 @@ calc_total_vol_dimension( me, box)
 
 Calculates volume/dimension of a 3D-Space with [x, y=5, z=1], based on a given value of total volume.
 """
-function calc_total_vol_dimension(volume)
-    if isempty(volume)
-	y_axis_vol = volume/x_axis_vol
-	return [y_axis_vol, x_axis_vol, 1.0]
-end 
-
+# function calc_total_vol_dimension(volume, x_axis_vol=5.0)
+# 	print(volume)
+# 	y_axis_vol = volume/x_axis_vol
+# 	return [y_axis_vol, x_axis_vol, 1.0] 
+# end
 #-----------------------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------------------
@@ -166,6 +161,8 @@ function agent_step!(me::Particle, box::ABM)
 			her.vel = her.vel ./ norm(her.vel)
 		end
 	end
+
+	print(box.obereGrenze)
 	move_agent!(me, box, me.speed)
 end
 
@@ -197,10 +194,10 @@ end
 # Scales a speed value to the interval [0,1] based on the provided max_speed.
 # """
 # function scale_speed(speed, max_speed)
-# 	if speed > max_speed
-# 		speed = max_speed
-# 	end
-#     return speed / max_speed
+#  	if speed > max_speed
+#  		speed = max_speed
+#  	end
+#      return speed / max_speed
 # end
 
 # #-----------------------------------------------------------------------------------------
@@ -229,11 +226,9 @@ end
 
 """
 function model_step!(model::ABM)
+	"""
 	println("T = ", model.temp, " K")
-	println("T temp_old = ", model.temp_old, " K")
 	println("P = ", model.pressure_pa, " Pa")
-	println("P pressure_bar_old = ", model.pressure_bar_old, " Pa")
-	println("n_mol = ", model.n_mol)
 	println("real_n_particles = ", model.real_n_particles)
 	println("n_particles = ", model.n_particles)
 	print("\n")
@@ -242,11 +237,8 @@ function model_step!(model::ABM)
 	println("molare_masse: ", model.molare_masse, " g/mol")
 	println("mass_kg: ", model.mass_kg, " kg")
 	"""
-	println(model.total_volume)
-
-	#TODO: Use pressure calculation from TD_Physics
+	model.obereGrenze = model.total_volume/5.0 #TODO: Change 
 	pressure_pa = model.n_mol * 8.314 * model.temp / (model.volume[1] * model.volume[2] * model.volume[3])
-
 	model.pressure_pa = round(pressure_pa, digits=3)
 	model.pressure_bar = round(model.pressure_pa / 1e5, digits=3)
 
@@ -308,7 +300,6 @@ Run a simulation of the IdealGas model.
 """
 
 params = Dict(
-		:n_particles => 20:1:100,
 		:temp => 100.0:1.0:1000.0,
 		:total_volume => 0:1:10,
 	)
@@ -316,10 +307,14 @@ params = Dict(
 function demo()
 	box = idealgas()
 
-	inner_energy(box) = box.e_inner
-	temperature(box) = box.temp
-	pressure_bar(box) = box.pressure_bar
-	mdata = [inner_energy, temperature, pressure_bar]
+	entropy(box) = box.entropy
+	mdata = [entropy]
+	mlabels = ["Entropie(Platzhalter)"]
+	
+	# inner_energy(box) = box.e_inner
+	# temperature(box) = box.temp
+	# pressure_bar(box) = box.pressure_bar
+	# mdata = [inner_energy, temperature, pressure_bar]
 	
 		playground,abmobs = abmplayground( box, idealgas;
 			agent_step!,
@@ -393,5 +388,4 @@ function demo()
 		# end
 		playground
 	end
-
 end	# of module IdealGas
