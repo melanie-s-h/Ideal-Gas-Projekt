@@ -25,6 +25,7 @@ The populating agents in the IdealGas model.
 	speed::Float64					# Particle's speed
 	radius::Float64					# Particle's radius
 	prev_partner::Int				# Previous collision partner id
+	last_bounce::Float64            # 
 end
 
 "Standard value that is definitely NOT a valid agent ID"
@@ -51,10 +52,10 @@ function idealgas(;
 	init_n_mol = copy(n_mol), 															# Initial number of mol
 	real_n_particles = n_mol * 6.022e23,												# Real number of Particles in box
     n_particles = real_n_particles/1e23,												# Number of Particles in simulation box
-	molare_masse = 4.0,																		# Helium Gas mass in atomic mass units
-	mass_kg = molare_masse * 1.66053906660e-27,												# Convert atomic/molecular mass to kg
-	mass_gas = round(n_mol * molare_masse, digits=3),								# Mass of gas
-	radius = 20.0,																			# Radius of Particles in the box
+	molare_masse = 4.0,																	# Helium Gas mass in atomic mass units
+	mass_kg = molare_masse * 1.66053906660e-27,											# Convert atomic/molecular mass to kg
+	mass_gas = round(n_mol * molare_masse, digits=3),									# Mass of gas
+	radius = 5.0,																		# Radius of Particles in the box
 	e_inner = 3/2 * real_n_particles * temp * 8.314,									# Inner energy of the gas
 	entropy = 0.0,
 	extent = (volume[2]*300.0, volume[1]*100.0),												# Extent of Particles space
@@ -80,7 +81,7 @@ function idealgas(;
 		:volumes	=> volumes,
 		:mass_gas	=> mass_gas,
 
-		##
+		
 		:placeholder => 0.0,
 	)
 
@@ -130,6 +131,27 @@ function agent_step!(me::Particle, box::ABM)
         # Update speeds based on new velocities
         me.speed = norm(me.vel)
         her.speed = norm(her.vel)
+
+		# Überprüfen, ob das Partikel nahe am Rand ist
+		x, y = me.pos
+		if x < 1.8 && box.proberties[:step] - me.last_bounce > 3
+			me.vel = (-me.vel[1], me.vel[2])
+			me.last_bounce = box.properties[:step]
+		elseif x > box.space.extent[1] - 1.8 && box.proberties[:step] - me.last_bounce > 3
+			me.vel = (-me.vel[1], me.vel[2])
+			me.last_bounce = box.properties[:step]
+		end
+		if y < 1.8 && box.properties[:step] - me.last_bounce > 3
+			me.vel = (me.vel[1], -me.vel[2])
+			
+		elseif y > box.space.extent[2] - 10
+			me.vel = (me.vel[1], -me.vel[2])
+		end
+
+		#me = foo(me,box)
+
+
+
     end
 
     move_agent!(me, box, me.speed)
@@ -352,6 +374,5 @@ params = Dict(
 		end
 		playground
 	end
-	pussy
 
 end	# of module IdealGas
