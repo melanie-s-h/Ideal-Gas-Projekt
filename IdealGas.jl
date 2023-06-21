@@ -225,7 +225,7 @@ Run a simulation of the IdealGas model.
 
 		pressure_label = Label(gl_labels[2,0], "Druck: " * string(round(box.pressure_bar, digits=2))* " Bar", fontsize=22)
 		mass_label = Label(gl_labels[3,0], "Masse: " * string(box.mass_gas)* " g", fontsize=22)
-		volume_label = Label(gl_labels[1,0], "Volumen: " * string(box.volume[1] * box.volume[2] * box.volume[3])* " m³ ; " * string(box.volume[1] * box.volume[2] * box.volume[3] * 1000) * " L", fontsize=22)
+		volume_label = Label(gl_labels[1,0], "Volumen: " * string(round(box.total_volume, digits=2))* " m³ ; " * string(round(box.total_volume * 1000, digits=2)) * " L", fontsize=22)
 
 		# Platzhalter Label
 		Label(gl_labels[4,0], "Placeholder", fontsize=22)
@@ -239,11 +239,11 @@ Run a simulation of the IdealGas model.
 
 
 		pressure_slider_bar_label = Label(slider_space[1,0], "Druck: ", fontsize=16)
-		pressure_slider_bar = Slider(slider_space[1,1], range = 0:0.1:10.0, startvalue=1.0)
+		pressure_slider_bar = Slider(slider_space[1,1], range = 0.1:0.1:10.0, startvalue=1.0)
 		pressure_slider_bar_value = Label(slider_space[1,2], string(pressure_slider_bar.value[]) * " Bar")
 
 		pressure_slider_pa_label = Label(slider_space[2,0], "Druck: ", fontsize=16)
-		pressure_slider_pa = Slider(slider_space[2,1], range = 0.0:1.0:1000000.0, startvalue=100000.0)
+		pressure_slider_pa = Slider(slider_space[2,1], range = 1.0:1.0:1000000.0, startvalue=100000.0)
 		pressure_slider_pa_value = Label(slider_space[2,2], string(pressure_slider_pa.value[]) * " Pa")
 
 		volume_slider_label = Label(slider_space[3,0], "Volumen: ", fontsize=16)
@@ -259,7 +259,7 @@ Run a simulation of the IdealGas model.
 			else
 				mass_label.text[] = string("Masse: ", string(box.mass_gas), " g")
 			end
-			volume_label.text[] = string("Volumen: ", string(box.total_volume), " m³ ; " * string(box.total_volume * 1000) * " L")
+			volume_label.text[] = string("Volumen: " * string(round(box.total_volume, digits=2))* " m³ ; " * string(round(box.total_volume * 1000, digits=2)) * " L")
 
 		end
 
@@ -307,7 +307,7 @@ Run a simulation of the IdealGas model.
 				if box.mode == "druck-vol"
 					volume = box.n_mol * 8.314 * box.temp/ box.pressure_pa
 					volume_slider_value.text[] = string(round(volume, digits=2)) * " m³"
-					set_close_to!(volume_slider, volume[])
+					set_close_to!(volume_slider, volume)
 				elseif box.mode == "druck-temp"
 					temp = calc_temperature(box)
 					temp_slider_value.text[] = string(round(temp, digits=2)) * " K"
@@ -328,7 +328,7 @@ Run a simulation of the IdealGas model.
 				if box.mode == "druck-vol"
 					volume = box.n_mol * 8.314 * box.temp/ box.pressure_pa
 					volume_slider_value.text[] = string(round(volume, digits=2)) * " m³"
-					set_close_to!(volume_slider, volume[])
+					set_close_to!(volume_slider, volume)
 				elseif box.mode == "druck-temp"
 					temp = calc_temperature(box)
 					temp_slider_value.text[] = string(round(temp, digits=2)) * " K"
