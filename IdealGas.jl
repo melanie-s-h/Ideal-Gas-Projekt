@@ -42,6 +42,13 @@ function idealgas(;
 	gases = Dict("Helium" => 4.0, "Hydrogen" => 1.0, "Oxygen" => 32.0),					# Gas types
 	volumes = Dict("Gasflasche" => [10.0, 2.0, 0.01], "Gastank" => [30, 100, 0.01]),	# Volume of containers
 	volume = [10.0, 2.0, 0.01], 														# Reale Maße des Containers
+	modes = Dict("Temperatur:Druck" => "temp-druck",
+				"Temperatur:Volumen" => "temp-vol",
+				 "Druck:Temperatur" => "druck-temp",
+				 "Druck:Volumen" => "druck-vol",
+				 "Volumen:Temperatur" => "vol-temp",
+				 "Volumen:Druck" => "vol-druck"),										# Modes of operation
+	mode = "temp-druck",																# actual Mode of operation
 	temp = 273.15,																		# Initial temperature of the gas in Kelvin
 	temp_old = copy(temp),																# Initial temperature of the gas in Kelvin
 	pressure_bar = 1.0,																	# Initial pressure of the gas in bar
@@ -65,7 +72,6 @@ function idealgas(;
 		:n_particles	=> n_particles,
 		:temp		=> temp,
 		:e_inner	=> e_inner,
-		:entropy 	=> entropy,
 		:pressure_pa	=> pressure_pa,
 		:pressure_bar	=> pressure_bar,
 		:real_n_particles	=> real_n_particles,
@@ -79,6 +85,8 @@ function idealgas(;
 		:mass_kg		=> mass_kg,
 		:volumes	=> volumes,
 		:mass_gas	=> mass_gas,
+		:modes		=> modes,
+		:mode		=> mode,
 
 		##
 		:placeholder => 0.0,
@@ -314,6 +322,7 @@ params = Dict(
 		gas_dropdown = Menu(gl_dropdowns[0,0], options = keys(box.gases), default = "Helium")
 		# volume_dropdown = Menu(count_layout[2,1], options = keys(box.volumes), default = "Gasflasche")
 		volume_dropdown = Menu(gl_dropdowns[0,1], options = keys(box.volumes), default = "Gasflasche")
+		mode_dropdown = Menu(gl_dropdowns[1,0], options = keys(box.modes), default = "Temperatur:Druck")
 		#volume_slider = SliderGrid(playground[1,1], (label = "Höhe: ", range = 0/50:0.1:10.0, startvalue=10.0))
 		#playground[5,1] = volume_slider
 		pressure_label = Label(gl_labels[2,0], "Druck: " * string(box.pressure_bar)* " Bar", fontsize=22)
@@ -350,6 +359,11 @@ params = Dict(
 		
 			
 		end
+
+		on(mode_dropdown.selection) do selected_mode
+			box.mode = box.modes[selected_mode]
+		end
+
 		playground
 	end
 
