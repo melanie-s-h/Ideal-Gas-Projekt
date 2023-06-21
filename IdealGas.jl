@@ -80,7 +80,7 @@ function idealgas(;
 		:mass_kg		=> mass_kg,
 		:volumes	=> volumes,
 		:mass_gas	=> mass_gas,
-
+		:step => 0,
 		
 		:placeholder => 0.0,
 	)
@@ -94,7 +94,7 @@ function idealgas(;
 		vel = vel ./ norm(vel)  					# ALWAYS maintain normalised state of vel!
 		speed = sqrt((3 * k * box.temp) / mass_kg)  # Initial speed based on temperature
 		speed = scale_speed(speed, max_speed)  		# Scale speed to avoid excessive velocities
-        add_agent!( box, vel, mass_kg, speed, radius, non_id)
+        add_agent!( box, vel, mass_kg, speed, radius, non_id, -Inf)
 	end
 
     return box
@@ -131,32 +131,36 @@ function agent_step!(me::Particle, box::ABM)
         # Update speeds based on new velocities
         me.speed = norm(me.vel)
         her.speed = norm(her.vel)
-
-		# Überprüfen, ob das Partikel nahe am Rand ist
-		x, y = me.pos
-		if x < 1.8 && box.proberties[:step] - me.last_bounce > 3
-			me.vel = (-me.vel[1], me.vel[2])
-			me.last_bounce = box.properties[:step]
-		elseif x > box.space.extent[1] - 1.8 && box.proberties[:step] - me.last_bounce > 3
-			me.vel = (-me.vel[1], me.vel[2])
-			me.last_bounce = box.properties[:step]
-		end
-		if y < 1.8 && box.properties[:step] - me.last_bounce > 3
-			me.vel = (me.vel[1], -me.vel[2])
-			
-		elseif y > box.space.extent[2] - 10
-			me.vel = (me.vel[1], -me.vel[2])
-		end
-
+		
 		#me = foo(me,box)
-
-
-
     end
+
+	# Überprüfen, ob das Partikel nahe am Rand ist
+	check_particle_near_border!(me, box)  # Aufruf der neuen Funktion
 
     move_agent!(me, box, me.speed)
 end
 
+#----------------------------------------------------------------------------------------
+
+function check_particle_near_border!(me, box)
+    x, y = me.pos
+
+    if x < 1.8 && box.properties[:step] - me.last_bounce > 3
+        me.vel = (-me.vel[1], me.vel[2])
+        me.last_bounce = box.properties[:step]
+    elseif x > box.space.extent[1] - 1.8 && box.properties[:step] - me.last_bounce > 3
+        me.vel = (-me.vel[1], me.vel[2])
+        me.last_bounce = box.properties[:step]
+    end
+    if y < 1.8 && box.properties[:step] - me.last_bounce > 3
+        me.vel = (me.vel[1], -me.vel[2])
+        me.last_bounce = box.properties[:step]			
+    elseif y > box.space.extent[2] - 1.8 && box.properties[:step] - me.last_bounce > 3 
+        me.vel = (me.vel[1], -me.vel[2])
+        me.last_bounce = box.properties[:step]
+    end
+end
 
 #-----------------------------------------------------------------------------------------
 """
@@ -242,6 +246,8 @@ function model_step!(model::ABM)
 	println("\n")
 	"""
 	model.entropy = 0.0
+
+	model.properties[:step] += 1 # steps werden gezählt, notwendig für die Abstoßung am Rand
 
     #model.e_inner = 3/2 * model.real_n_particles * model.temp * 8.314
 
