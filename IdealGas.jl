@@ -55,12 +55,12 @@ function idealgas(;
 	molare_masse = 4.0,																	# Helium Gas mass in atomic mass units
 	mass_kg = molare_masse * 1.66053906660e-27,											# Convert atomic/molecular mass to kg
 	mass_gas = round(n_mol * molare_masse, digits=3),									# Mass of gas
-	radius = 5.0,																		# Radius of Particles in the box
+	radius = 8.0,																		# Radius of Particles in the box
 	e_inner = 3/2 * real_n_particles * temp * 8.314,									# Inner energy of the gas
 	entropy = 0.0,
 	extent = (volume[2]*300.0, volume[1]*100.0),												# Extent of Particles space
 )
-    space = ContinuousSpace(extent; spacing = 2.5)
+    space = ContinuousSpace(extent; spacing = radius/2)
 
 	properties = Dict(
 		:n_particles	=> n_particles,
@@ -138,6 +138,11 @@ function agent_step!(me::Particle, box::ABM)
 	# Überprüfen, ob das Partikel nahe am Rand ist
 	check_particle_near_border!(me, box)  # Aufruf der neuen Funktion
 
+	#if me.pos[2] > 500
+		#println("hello")
+	#	me.pos = (me.pos[1], 20)
+	#end
+
     move_agent!(me, box, me.speed)
 end
 
@@ -159,6 +164,12 @@ function check_particle_near_border!(me, box)
     elseif y > box.space.extent[2] - 1.8 && box.properties[:step] - me.last_bounce > 3 
         me.vel = (me.vel[1], -me.vel[2])
         me.last_bounce = box.properties[:step]
+    end
+
+	# Überprüfen, ob y > 500 und falls ja, setzen Sie y auf 500 und invertieren Sie die y-Geschwindigkeit
+    if y > 500
+        me.pos = (x, 498)
+        me.vel = (me.vel[1], -me.vel[2])
     end
 end
 
