@@ -4,7 +4,7 @@
 änderung
 Extending SimpleParticles to conserve kinetic energy and momentum.
 
-Author: Niall Palfreyman, 20/01/23
+Author: Francisco Hella, Felix Rollbühler, Melanie *, Jan Wiechmann, 22/06/23
 """
 module IdealGas
 
@@ -116,8 +116,6 @@ function calc_total_vol_dimension(volume, x_axis_vol=5.0)
  	return [y_axis_vol, x_axis_vol, 1.0] 
 end
 #-----------------------------------------------------------------------------------------
-
-#-----------------------------------------------------------------------------------------
 """
 	agent_step!( me, box)
 
@@ -157,7 +155,11 @@ function agent_step!(me::Particle, box::ABM)
 			her.vel = Tuple(Rback*[herAlongVel,herPerpVel])
 			her.vel = her.vel ./ norm(her.vel)
 		end
+
+		he
 	end
+
+	
 	move_agent!(me, box, me.speed)
 end
 #-----------------------------------------------------------------------------------------
