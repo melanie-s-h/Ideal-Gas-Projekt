@@ -11,7 +11,7 @@ module IdealGas
 
 include("AgentTools.jl")
 include("TD_Physics.jl")
-using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools, GeometryBasics, Observables
+using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools
 
 #-----------------------------------------------------------------------------------------
 # Module types:
@@ -26,7 +26,7 @@ The populating agents in the IdealGas model.
 	speed::Float64					# Particle's speed
 	radius::Float64					# Particle's radius
 	prev_partner::Int				# Previous collision partner id
-	last_bounce::Float64            # 
+	last_bounce::Float64			
 end
 
 "Standard value that is definitely NOT a valid agent ID"
@@ -72,7 +72,6 @@ function idealgas(;
 		:total_volume	=> total_volume,
 		:e_inner	=> e_inner,
 		:entropy 	=> entropy,
-		:entropy 	=> entropy,
 		:pressure_pa	=> pressure_pa,
 		:pressure_bar	=> pressure_bar,
 		:real_n_particles	=> real_n_particles,
@@ -92,14 +91,16 @@ function idealgas(;
 
     box = ABM( Particle, space; properties, scheduler = Schedulers.Randomly())
 
-    k = 1.38e-23  									# Boltzmann constant in J/K
-	max_speed = 1000.0  							# Maximum speed in m/s
+    k = 1.38e-23  # Boltzmann constant in J/K
+	mass_kg = mass_u * 1.66053906660e-27  # Convert atomic/molecular mass to kg
+	max_speed = 1000.0  # Maximum speed in m/s
 	for _ in 1:n_particles
 		vel = Tuple( 2rand(2).-1)
-		vel = vel ./ norm(vel)  					# ALWAYS maintain normalised state of vel!
+		vel = vel ./ norm(vel)  # ALWAYS maintain normalised state of vel!
 		speed = sqrt((3 * k * box.temp) / mass_kg)  # Initial speed based on temperature
 		speed = TD_Physics.scale_speed(speed, max_speed)  		# Scale speed to avoid excessive velocities
-        add_agent!( box, vel, mass_kg, speed, radius, non_id)
+		#speed = scale_speed(speed, max_speed)  		# Scale speed to avoid excessive velocities
+        add_agent!( box, vel, mass_kg, speed, radius, non_id, -Inf)
 	end
 
 	
@@ -124,25 +125,22 @@ This is the heart of the IdealGas model: It calculates how Particles collide wit
 while conserving momentum and kinetic energy.
 """
 function agent_step!(me::Particle, box::ABM)
-    her = random_nearby_agent(me, box, 2*me.radius)   # Grab nearby particle
-    
-    if her !== nothing && her.id < me.id && her.id != me.prev_partner
-        # New collision partner has not already been handled and is not my previous partner:
-        me.prev_partner = her.id           # Update previous partners to avoid repetitive juddering collisions.
-        her.prev_partner = me.id           # ditto for the other agent.
+	her = random_nearby_agent( me, box, 2*me.radius)	# Grab nearby particle
+	if her === nothing
+		# No new partners - forget previous collision partner:
+		me.prev_partner = non_id
+	elseif her.id < me.id && her.id != me.prev_partner
+		# New collision partner has not already been handled and is not my previous partner:
+		me.prev_partner = her.id							# Update previous partners to avoid
+		her.prev_partner = me.id							# repetitive juddering collisions.
+		cntct = (x->[cos(x),sin(x)])(2rand()pi)				# Unit vector to contact point with partner
+		Rctct = [cntct[1] cntct[2]; -cntct[2] cntct[1]]		# Rotation into contact directn coords
+		Rback = [cntct[1] -cntct[2]; cntct[2] cntct[1]]		# Inverse rotation back to world coords
 
-        # Compute relative position and velocity:
-        rel_pos = me.pos .- her.pos
-        rel_vel = me.vel .- her.vel
-
-        # Compute collision impact vector:
-        distance_sq = sum(rel_pos .^ 2)
-        velocity_dot = sum(rel_vel .* rel_pos)
-        impulse = 2 * me.mass * her.mass / (me.mass + her.mass) * velocity_dot ./ distance_sq .* rel_pos
-
-        # Update velocities according to the impulse
-		me.vel = (me.vel[1] - (impulse ./ me.mass)[1], me.vel[2] - (impulse ./ me.mass)[2])
-		her.vel = (her.vel[1] + (impulse ./ her.mass)[1], her.vel[2] + (impulse ./ her.mass)[2])
+		# Rotate velocities into coordinates directed ALONG and PERPendicular to contact direction:
+		myAlongVel, myPerpVel = me.speed * Rctct * collect(me.vel)					# My velocity
+		herAlongVel, herPerpVel = her.speed * Rctct * collect(her.vel)				# Her velocity
+		cmAlongVel = (me.mass*myAlongVel + her.mass*herAlongVel)/(me.mass+her.mass)	# C of M velocity
 
 		# Calculate collision effects along contact direction (perp direction is unaffected):
 		myAlongVel = 2cmAlongVel - myAlongVel
@@ -159,14 +157,12 @@ function agent_step!(me::Particle, box::ABM)
 			her.vel = Tuple(Rback*[herAlongVel,herPerpVel])
 			her.vel = her.vel ./ norm(her.vel)
 		end
-
-		check_particle_near_border!(me, box)  # Aufruf der neuen Funktion
 	end
 
-	
+	check_particle_near_border!(me, box)  # Aufruf der neuen Funktion
+		
 	move_agent!(me, box, me.speed)
 end
-
 #----------------------------------------------------------------------------------------
 
 function check_particle_near_border!(me, box)
@@ -188,64 +184,11 @@ function check_particle_near_border!(me, box)
     end
 
 	# Überprüfen, ob y > 500 und falls ja, setzen Sie y auf 500 und invertieren Sie die y-Geschwindigkeit
-    if y > 500
-        me.pos = (x, 498)
-        me.vel = (me.vel[1], -me.vel[2])
-    end
+    # if y > 500
+    #     me.pos = (x, 498)
+    #     me.vel = (me.vel[1], -me.vel[2])
+    # end
 end
-
-#-----------------------------------------------------------------------------------------
-"""
-	momentum( particle)
-
-Return the momentum of this particle.
-"""
-function momentum(particle)
-	particle.mass * particle.speed * collect(particle.vel)
-end
-
-#-----------------------------------------------------------------------------------------
-"""
-	kinetic_energy( particle)
-
-Return the kinetic energy of this particle.
-"""
-function kinetic_energy(particle)
-	particle.mass * particle.speed^2 / 2
-end
-
-#-----------------------------------------------------------------------------------------
-"""
-	scale_speed(speed, max_speed)
-
-Scales a speed value to the interval [0,1] based on the provided max_speed.
-"""
-function scale_speed(speed, max_speed)
-	if speed > max_speed
-		speed = max_speed
-	end
-    return speed / max_speed
-end
-
-#-----------------------------------------------------------------------------------------
-
-"""
-	calc_temperature
-
-Return the temperature of the system.
-"""
-function calc_temperature(model::ABM)   
-    # T = Ekin / (k * 2/3 * N ); Boltzmann constant k = 1.38e-23
-	P = model.pressure_pa
-	R = 8.314 # Gaskonstante in J/(mol·K)
-	n = model.n_mol # Anzahl der Moleküle
-	V = model.volume[1] * model.volume[2] * model.volume[3]
-	T = (P*V)/(R*n)
-	return T
-end
-
-
-
 #-----------------------------------------------------------------------------------------
 """
 	model_step!( model)
@@ -264,7 +207,7 @@ function model_step!(model::ABM)
 	println("molare_masse: ", model.molare_masse, " g/mol")
 	println("mass_kg: ", model.mass_kg, " kg")
 	"""
-
+	model.topBorder = model.total_volume/5.0
 	pressure_pa = model.n_mol * 8.314 * model.temp / (model.volume[1] * model.volume[2] * model.volume[3])
 	model.pressure_pa = round(pressure_pa, digits=3)
 	model.pressure_bar = round(model.pressure_pa / 1e5, digits=3)
@@ -279,25 +222,7 @@ function model_step!(model::ABM)
 	"""
 	model.entropy = 0.0
 
-	model.properties[:step] += 1 # steps werden gezählt, notwendig für die Abstoßung am Rand
-
-    #model.e_inner = 3/2 * model.real_n_particles * model.temp * 8.314
-
-end
-
-#------------------------------------------------------------------------------------------
-"""
-	calc_n_mol(model)
-
-	"""
-	println("pressure_pa: " , model.pressure_pa, " Pa")
-	println("pressure_bar: ", model.pressure_bar, " Bar")
-	println("n_mol: ", model.n_mol, " mol")
-	println("mass_gas: ", model.mass_gas, " g")
-	println("\n")
-	println("\n")
-	"""
-	model.entropy = 0.0
+	model.properties[:step] += 1.0
 
     #model.e_inner = 3/2 * model.real_n_particles * model.temp * 8.314
 
@@ -319,10 +244,14 @@ params = Dict(
 function demo()
 	box = idealgas()
 
-	inner_energy(box) = box.e_inner
-	temperature(box) = box.temp
-	pressure_bar(box) = box.pressure_bar
-	mdata = [inner_energy, temperature, pressure_bar]
+	entropy(box) = box.entropy
+	mdata = [entropy]
+	mlabels = ["Entropie(Platzhalter)"]
+	
+	# inner_energy(box) = box.e_inner
+	# temperature(box) = box.temp
+	# pressure_bar(box) = box.pressure_bar
+	# mdata = [inner_energy, temperature, pressure_bar]
 	
 		playground,abmobs = abmplayground( box, idealgas;
 			agent_step!,
