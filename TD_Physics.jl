@@ -12,6 +12,8 @@ module TD_Physics
 include("AgentTools.jl")
 using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, GeometryBasics, Observables
 
+export calc_temperature, calc_pressure, calc_n_mol, calc_real_n_particles, momentum, kinetic_energy, scale_speed, calc_total_vol_dimension
+
 #-----------------------------------------------------------------------------------------
 """
 	momentum( particle)
@@ -67,7 +69,7 @@ Return the temperature of the system.
 
 Return the number of molecules in the system.
 """
-	function calc_n_mol(model::ABM)
+	function calc_n_mol(model)
 		return model.pressure_bar * 1e5 * model.volume[1] * model.volume[2] * model.volume[3] / (8.314*model.temp)
 	end
 
@@ -77,17 +79,27 @@ Return the number of molecules in the system.
 
 Return the number of particles in the system.
 """
-	function calc_real_n_particles(model::ABM)
+	function calc_real_n_particles(model)
 		return model.n_mol * 6.022e23
 	end
 
 #------------------------------------------------------------------------------------------
 """
-	calc_pressure(box)
+calc_total_vol_dimension( me, box)
+
+Calculates volume/dimension of a 3D-Space with [x, y=5, z=1], based on a given value of total volume.
+"""
+function calc_total_vol_dimension(volume, x_axis_vol=5.0)
+ 	y_axis_vol = volume/x_axis_vol
+ 	return [y_axis_vol, x_axis_vol, 1.0] 
+end
+#-----------------------------------------------------------------------------------------
+"""
+	calc_pressure(model)
 
 Return the pressure of the system.
 """
-	function calc_pressure(model::ABM)
+	function calc_pressure(model)
 		R = 8.314 # Gaskonstante in J/(mol·K)
 		n = model.n_mol # Anzahl der Moleküle (angenommen, jedes Partikel repräsentiert ein Molekül)
 		V = model.volume[1] * model.volume[2] * model.volume[3] # Volumen des Behälters
@@ -97,3 +109,36 @@ Return the pressure of the system.
 	end
 
 end #------------------------------------------------------------------------------------------
+"""
+    calc_volume(model)
+
+Return the volume of the system.
+"""
+function calc_volume(model)
+    R = 8.314 # Gaskonstante in J/(mol·K)
+    n = model.n_mol # Anzahl der Moleküle (angenommen, jedes Partikel repräsentiert ein Molekül)
+    T = model.temp # Durchschnittstemperatur der Moleküle
+    P = model.pressure_pa
+    V = n * R * T / P
+    return V
+end
+
+#---------------------------------------------------------------------------------------------
+"""
+	calc_temperature
+
+Return the temperature of the system.
+"""
+	function calc_temperature(model)   
+		# T = Ekin / (k * 2/3 * N ); Boltzmann constant k = 1.38e-23
+		P = model.pressure_pa
+		R = 8.314 # Gaskonstante in J/(mol·K)
+		n = model.n_mol # Anzahl der Moleküle
+		V = model.volume[1] * model.volume[2] * model.volume[3]
+		T = (P*V)/(R*n)
+		return T
+	end
+
+#------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------
