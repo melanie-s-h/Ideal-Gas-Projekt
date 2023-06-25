@@ -100,7 +100,7 @@ function idealgas(;
     box = ABM( Particle, space; properties, scheduler = Schedulers.Randomly())
 
     k = 1.38e-23  # Boltzmann constant in J/K
-	mass_kg = mass_u * 1.66053906660e-27  # Convert atomic/molecular mass to kg
+	mass_kg = box.molare_masse * 1.66053906660e-27  # Convert atomic/molecular mass to kg
 	max_speed = 1000.0  # Maximum speed in m/s
 	for _ in 1:n_particles
 		vel = Tuple( 2rand(2).-1)
@@ -176,19 +176,19 @@ end
 function check_particle_near_border!(me, box)
     x, y = me.pos
 
-    if x < 1.8 && box.properties[:step] - me.last_bounce > 3
+    if x < 1.8 && box.step - me.last_bounce > 3
         me.vel = (-me.vel[1], me.vel[2])
-        me.last_bounce = box.properties[:step]
-    elseif x > box.space.extent[1] - 1.8 && box.properties[:step] - me.last_bounce > 3
+        me.last_bounce = box.step
+    elseif x > box.space.extent[1] - 1.8 && box.step - me.last_bounce > 3
         me.vel = (-me.vel[1], me.vel[2])
-        me.last_bounce = box.properties[:step]
+        me.last_bounce = box.step
     end
-    if y < 1.8 && box.properties[:step] - me.last_bounce > 3
+    if y < 1.8 && box.step - me.last_bounce > 3
         me.vel = (me.vel[1], -me.vel[2])
-        me.last_bounce = box.properties[:step]			
-    elseif y > box.space.extent[2] - 1.8 && box.properties[:step] - me.last_bounce > 3 
+        me.last_bounce = box.step			
+    elseif y > box.space.extent[2] - 1.8 && box.step - me.last_bounce > 3 
         me.vel = (me.vel[1], -me.vel[2])
-        me.last_bounce = box.properties[:step]
+        me.last_bounce = box.step
     end
 
 	# Überprüfen, ob y > 500 und falls ja, setzen Sie y auf 500 und invertieren Sie die y-Geschwindigkeit
@@ -228,7 +228,7 @@ function model_step!(model::ABM)
 	u_rms = sqrt(3 * R * model.temp / model.molare_masse)	# uᵣₘₛ = sqrt(3*R*T / M) = sqrt(3*kᵦ*T / m)
 	model.e_internal = calc_internal_energy(model)
 
-	model.properties[:step] += 1.0
+	model.step += 1.0
 
 
 end
