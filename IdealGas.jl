@@ -31,6 +31,7 @@ end
 
 "Standard value that is definitely NOT a valid agent ID"
 const non_id = -1
+const R = 8.314 # Gaskonstante in J/(mol·K)
 
 #-----------------------------------------------------------------------------------------
 # Module methods:
@@ -53,6 +54,7 @@ function idealgas(;
 	volume = calc_total_vol_dimension(total_volume), 									# Dimensions of the container
 	topBorder = total_volume/5.0,
 	temp = 293.15,																		# Initial temperature of the gas in Kelvin
+	temp_old = 293.15,###
 	pressure_bar = 1.0,																	# Initial pressure of the gas in bar
 	pressure_pa =  pressure_bar*1e5,													# Initial pressure of the gas in Pascal
 	n_mol = pressure_pa * volume[1] * volume[2] * volume[3] / (8.314*temp),				# Number of mol
@@ -63,8 +65,10 @@ function idealgas(;
 	mass_kg = molare_masse * 1.66053906660e-27,											# Convert atomic/molecular mass to kg
 	mass_gas = round(n_mol * molare_masse, digits=3),									# Mass of gas
 	radius = 4.0,																		# Radius of Particles in the box
-	e_inner = 3/2 * real_n_particles * temp * 8.314,									# Inner energy of the gas
-	entropy = 0.0,
+	# e_internal = 3/2 * real_n_particles * temp * 8.314,									# Inner energy of the gas
+	### U = 3/2 * N(Anzahl Part) * k(Boltzmann) * T = 3/2 * n(mol) * R * T
+	e_internal = 3/2 * n_mol * 8.314 * temp,
+	entropy_change = 0.0,																# Change in entropy of the gas
 	extent = (500,500),																	# Extent of Particles space
 )
     space = ContinuousSpace(extent; spacing = radius/2.0)
@@ -72,9 +76,10 @@ function idealgas(;
 	properties = Dict(
 		:n_particles	=> n_particles,
 		:temp		=> temp,
+		:temp_old		=> temp_old,
 		:total_volume	=> total_volume,
-		:e_inner	=> e_inner,
-		:entropy 	=> entropy,
+		:e_internal	=> e_internal,
+		:entropy_change 	=> entropy_change,
 		:pressure_pa	=> pressure_pa,
 		:pressure_bar	=> pressure_bar,
 		:real_n_particles	=> real_n_particles,
@@ -216,11 +221,15 @@ function model_step!(model::ABM)
 		model.temp = round(temp, digits=2)
 	end
 
-	model.entropy = 0.0
+	model.entropy_change = calc_entropy_change(model)
+	model.temp_old = model.temp
+	
+
+	u_rms = sqrt(3 * R * model.temp / model.molare_masse)	# uᵣₘₛ = sqrt(3*R*T / M) = sqrt(3*kᵦ*T / m)
+	model.e_internal = calc_internal_energy(model)
 
 	model.properties[:step] += 1.0
 
-    #model.e_inner = 3/2 * model.real_n_particles * model.temp * 8.314
 
 end
 
@@ -238,10 +247,9 @@ Run a simulation of the IdealGas model.
 		box = idealgas()
 		#params = Dict(:temp => 100.0:1.0:1000.0,:total_volume => 0:0.1:30,:placeholder => 0:1:10)
 	
-	# inner_energy(box) = box.e_inner
-	# temperature(box) = box.temp
-	# pressure_bar(box) = box.pressure_bar
-	# mdata = [inner_energy, temperature, pressure_bar]
+		entropy(box) = box.entropy_change
+		mdata = [entropy]
+		mlabels = ["ΔS in [J/K] (Entropieänderung)"]
 	
 		playground,abmobs = abmplayground( box, idealgas;
 			agent_step!,
@@ -279,9 +287,7 @@ Run a simulation of the IdealGas model.
 		pressure_label = Label(gl_labels[2,0], "Druck: " * string(round(box.pressure_bar, digits=2))* " Bar", fontsize=22)
 		mass_label = Label(gl_labels[3,0], "Masse: " * string(box.mass_gas)* " g", fontsize=22)
 		volume_label = Label(gl_labels[1,0], "Volumen: " * string(round(box.total_volume, digits=2))* " m³ ; " * string(round(box.total_volume * 1000, digits=2)) * " L", fontsize=22)
-
-		# Platzhalter Label
-		Label(gl_labels[4,0], "Placeholder", fontsize=22)
+		e_internal_label = Label(gl_labels[4,0], "Eᵢ: " * string(round(box.e_internal, digits=2)) * " J", fontsize=22)
 
 		# Custom Slider
 		# Allows to set the value of the slider
@@ -305,7 +311,7 @@ Run a simulation of the IdealGas model.
 
 
 		on(abmobs.model) do _
-
+			e_internal_label.text[] = string("Eᵢ: ", string(round(box.e_internal)), " J")
 			pressure_label.text[] = string("Druck: ", string(round(box.pressure_bar, digits=2)), " Bar")
 			if box.mass_gas > 999.9
 				mass_label.text[] = string("Masse: ", string(round(box.mass_gas/1000, digits=3), " kg"))
