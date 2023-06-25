@@ -26,7 +26,7 @@ The populating agents in the IdealGas model.
 	speed::Float64					# Particle's speed
 	radius::Float64					# Particle's radius
 	prev_partner::Int				# Previous collision partner id
-	last_bounce::Float64			
+	last_bounce::Float64		
 end
 
 "Standard value that is definitely NOT a valid agent ID"
@@ -55,7 +55,7 @@ function idealgas(;
 	real_n_particles = n_mol * 6.022e23/50,												# Real number of Particles in box: Reduction for simplicity
     n_particles = real_n_particles/1e23,												# Number of Particles in simulation box
 	molare_masse = 4.0,																		# Helium Gas mass in atomic mass units
-	mass_u = 4.0,										# Helium Gas mass in atomic mass units
+	mass_u = 4.0,																		# Helium Gas mass in atomic mass units
 	mass_kg = molare_masse * 1.66053906660e-27,												# Convert atomic/molecular mass to kg
 	mass_gas = round(n_mol * molare_masse, digits=3),								# Mass of gas
 	radius = 4.0,																			# Radius of Particles in the box
@@ -160,6 +160,8 @@ function agent_step!(me::Particle, box::ABM)
 	end
 
 	check_particle_near_border!(me, box)  # Aufruf der neuen Funktion
+
+	button_reduce_volume!(me, box) 
 		
 	move_agent!(me, box, me.speed)
 end
@@ -168,27 +170,56 @@ end
 function check_particle_near_border!(me, box)
     x, y = me.pos
 
-    if x < 1.8 && box.properties[:step] - me.last_bounce > 3
+	# normales Abstoßen
+
+    if x > me.radius/2 && x < me.radius/2 + 1.8 && box.properties[:step] - me.last_bounce > 3
         me.vel = (-me.vel[1], me.vel[2])
         me.last_bounce = box.properties[:step]
     elseif x > box.space.extent[1] - 1.8 && box.properties[:step] - me.last_bounce > 3
         me.vel = (-me.vel[1], me.vel[2])
         me.last_bounce = box.properties[:step]
     end
-    if y < 1.8 && box.properties[:step] - me.last_bounce > 3
+    if y > me.radius/2 && y < me.radius/2 + 1.8 && box.properties[:step] - me.last_bounce > 3
         me.vel = (me.vel[1], -me.vel[2])
         me.last_bounce = box.properties[:step]			
     elseif y > box.space.extent[2] - 1.8 && box.properties[:step] - me.last_bounce > 3 
         me.vel = (me.vel[1], -me.vel[2])
         me.last_bounce = box.properties[:step]
     end
+	
+	#println(me.speed)
+	
+end
+#-----------------------------------------------------------------------------------------
+
+function button_reduce_volume!(me, box)
+	x, y = me.pos
 
 	# Überprüfen, ob y > 500 und falls ja, setzen Sie y auf 500 und invertieren Sie die y-Geschwindigkeit
-    # if y > 500
-    #     me.pos = (x, 498)
-    #     me.vel = (me.vel[1], -me.vel[2])
-    # end
+	reduce_volume = 500 - box.properties[:step]/4
+	if reduce_volume < 250 
+		reduce_volume  = 250
+		if x > 248.2 && box.properties[:step] - me.last_bounce > 3
+			me.vel = (-me.vel[1], me.vel[2])
+        	me.last_bounce = box.properties[:step]
+		end
+	else 
+	println(reduce_volume)
+     if x > reduce_volume 
+		if box.properties[:step] - me.last_bounce < 3 # wenn der letzte Treffer noch nicht lange her war 
+			me.speed = me.speed +1
+			println(box.properties[:step] - me.last_bounce)
+		end
+		if box.properties[:step] - me.last_bounce > 3 # wenn der letzte Treffer schon länger her war 
+         me.vel = (-me.vel[1], me.vel[2])
+		 me.speed = me.speed + 1
+		 me.last_bounce = box.properties[:step]
+		end
+     end
+	end
+
 end
+
 #-----------------------------------------------------------------------------------------
 """
 	model_step!( model)
