@@ -65,9 +65,8 @@ function idealgas(;
 	mass_kg = molare_masse * 1.66053906660e-27,											# Convert atomic/molecular mass to kg
 	mass_gas = round(n_mol * molare_masse, digits=3),									# Mass of gas
 	radius = 4.0,																		# Radius of Particles in the box
-	# e_internal = 3/2 * real_n_particles * temp * 8.314,									# Inner energy of the gas
-	### U = 3/2 * N(Anzahl Part) * k(Boltzmann) * T = 3/2 * n(mol) * R * T
-	e_internal = 3/2 * n_mol * 8.314 * temp,
+	# U = 3/2 * N(Anzahl Part) * k(Boltzmann) * T = 3/2 * n(mol) * R * T
+	e_internal = 3/2 * n_mol * 8.314 * temp,											# Inner energy of the gas
 	entropy_change = 0.0,																# Change in entropy of the gas
 	extent = (500,500),																	# Extent of Particles space
 )
@@ -99,13 +98,13 @@ function idealgas(;
 
     box = ABM( Particle, space; properties, scheduler = Schedulers.Randomly())
 
-    k = 1.38e-23  # Boltzmann constant in J/K
-	mass_kg = box.molare_masse * 1.66053906660e-27  # Convert atomic/molecular mass to kg
-	max_speed = 1000.0  # Maximum speed in m/s
+	molare_masse_kg = box.molare_masse / 1000	# Convert g/mol to kg/mol
+	max_speed = 4400.0  # Maximum speed in m/s
 	for _ in 1:n_particles
 		vel = Tuple( 2rand(2).-1)
 		vel = vel ./ norm(vel)  # ALWAYS maintain normalised state of vel!
-		speed = sqrt((3 * k * box.temp) / mass_kg)  # Initial speed based on temperature
+		# uᵣₘₛ = sqrt(3*R*T / M) M in kg/mol
+		speed = sqrt((3 * R * box.temp) / molare_masse_kg)  # Initial speed based on temperature
 		speed = TD_Physics.scale_speed(speed, max_speed)  		# Scale speed to avoid excessive velocities
 		#speed = scale_speed(speed, max_speed)  		# Scale speed to avoid excessive velocities
         add_agent!( box, vel, mass_kg, speed, radius, non_id, -Inf)
@@ -222,11 +221,15 @@ function model_step!(model::ABM)
 	end
 
 	model.entropy_change = calc_entropy_change(model)
-	model.temp_old = model.temp
 	
-
-	u_rms = sqrt(3 * R * model.temp / model.molare_masse)	# uᵣₘₛ = sqrt(3*R*T / M) = sqrt(3*kᵦ*T / m)
 	model.e_internal = calc_internal_energy(model)
+
+	molare_masse_kg = model.molare_masse / 1000	# Convert g/mol to kg/mol
+	max_speed = 4400.0  # Maximum speed in m/s
+	u_rms = sqrt((3 * R * model.temp) / molare_masse_kg)  # Root mean squared speed based on temperature
+	for particle in allagents(model)
+		particle.speed = TD_Physics.scale_speed(u_rms, max_speed)  
+	end
 
 	model.step += 1.0
 

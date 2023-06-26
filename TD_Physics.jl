@@ -33,7 +33,7 @@ Scales a speed value to the interval [0,1] based on the provided max_speed.
 		if speed > max_speed
 			speed = max_speed
 		end
-		return speed / max_speed
+		return 3 * speed / max_speed
 	end
 
 #-----------------------------------------------------------------------------------------
@@ -125,10 +125,11 @@ Return the change in entropy of the system.
 		else				# Isothermal process: No change in entropy
 			return 0.0
 		end
-		dtemp = model.temp - model.temp_old		# ΔT = T₂ - T₁
-		Q = model.n_mol * C * dtemp				# ΔQ = n * C * ΔT (Heat Exchange)
-		S = Q / model.temp						# ΔS = ΔQ / T	(Change in Entropy)
-		return S
+		Δtemp = model.temp - model.temp_old			# ΔT = T₂ - T₁
+		ΔQ = model.n_mol * C * Δtemp				# ΔQ = n * C * ΔT (Heat Exchange)
+		ΔS = ΔQ / model.temp						# ΔS = ΔQ / T	(Change in Entropy)
+		model.temp_old = model.temp
+		return ΔS
 	end
 
 #------------------------------------------------------------------------------------------
