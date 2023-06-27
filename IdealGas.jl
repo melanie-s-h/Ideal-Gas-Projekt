@@ -57,12 +57,13 @@ function idealgas(;
 	pressure_pa =  pressure_bar*1e5,													# Initial pressure of the gas in Pascal
 	n_mol = pressure_pa * volume[1] * volume[2] * volume[3] / (8.314*temp),				# Number of mol
 	init_n_mol = copy(n_mol), 															# Initial number of mol
-	real_n_particles = n_mol * 6.022e23/50,												# Real number of Particles in box: Reduction for simplicity
+	real_n_particles = n_mol * 6.022e23/4,												# Real number of Particles in box: Reduction for simplicity
     n_particles = real_n_particles/1e23,												# Number of Particles in simulation box
 	molare_masse = 4.0,																	# Helium Gas mass in atomic mass units
+	mass_u = 4.0,
 	mass_kg = molare_masse * 1.66053906660e-27,											# Convert atomic/molecular mass to kg
 	mass_gas = round(n_mol * molare_masse, digits=3),									# Mass of gas
-	radius = 4.0,																		# Radius of Particles in the box
+	radius = 2.0,																		# Radius of Particles in the box
 	e_inner = 3/2 * real_n_particles * temp * 8.314,									# Inner energy of the gas
 	entropy = 0.0,
 	extent = (500,500),																	# Extent of Particles space
@@ -85,7 +86,7 @@ function idealgas(;
 		:molare_masse		=> molare_masse,
 		:mass_kg		=> mass_kg,
 		:mass_gas	=> mass_gas,
-		:topBorder => topBorder, #ChangeName
+		:topBorder => topBorder,
 		:step => 0,
 		:modes				=> modes,
 		:mode				=> mode,
@@ -110,6 +111,8 @@ function idealgas(;
 
     return box
 end
+#TODO: Zur Volumenveränderung zwei Buttons, erhöhen und erniedrigen
+#TODO: Volumenveränderung beschleunigt die Teilchen die gegen die Seite von der Arbeitverrichtet wird
 #-----------------------------------------------------------------------------------------
 """
 calc_total_vol_dimension( me, box)
@@ -238,10 +241,9 @@ Run a simulation of the IdealGas model.
 		box = idealgas()
 		#params = Dict(:temp => 100.0:1.0:1000.0,:total_volume => 0:0.1:30,:placeholder => 0:1:10)
 	
-	# inner_energy(box) = box.e_inner
-	# temperature(box) = box.temp
-	# pressure_bar(box) = box.pressure_bar
-	# mdata = [inner_energy, temperature, pressure_bar]
+		entropy(box) = box.entropy
+		mdata = [entropy]
+		mlabels = ["Entropie(Platzhalter)"]
 	
 		playground,abmobs = abmplayground( box, idealgas;
 			agent_step!,
