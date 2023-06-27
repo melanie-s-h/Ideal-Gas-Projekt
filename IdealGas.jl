@@ -276,6 +276,8 @@ Run a simulation of the IdealGas model.
 		playground[2,1] = playground.content[2]
 		#playground[2,2] = playground.content[7]
 		slider_space = playground[2,2] = GridLayout()
+		# Buttons to change volume 
+		vol_change_btns = playground[1,1] = GridLayout() 
 		# Buttons
 		gl_buttons = playground[3,1] = GridLayout()
 		gl_buttons[0,2] = playground.content[3]
@@ -294,6 +296,26 @@ Run a simulation of the IdealGas model.
 		mass_label = Label(gl_labels[3,0], "Masse: " * string(box.mass_gas)* " g", fontsize=22)
 		volume_label = Label(gl_labels[1,0], "Volumen: " * string(round(box.total_volume, digits=2))* " m³ ; " * string(round(box.total_volume * 1000, digits=2)) * " L", fontsize=22)
 		e_internal_label = Label(gl_labels[4,0], "Eᵢ: " * string(round(box.e_internal, digits=2)) * " J", fontsize=22)
+		
+		#Custom Buttons
+		increase_vol_btn = Button(vol_change_btns[0,1:2], label = "Increase\nVolumen")# = print("increase"))#increase_vol_const())
+		pause_vol_btn = Button(vol_change_btns[0,3], label = "Pause")
+		decrease_vol_btn = Button(vol_change_btns[0,4:5], label = "Decrease\nVolumen")# = print("decrease"))#decrease_vol_const())
+
+	
+		#TODO: Hier volumen change funktionen aufrufen
+		on(increase_vol_btn.clicks) do _
+			println("increase_vol_btn")
+		end  
+
+		on(pause_vol_btn.clicks) do _
+			println("pause volume change")
+		end 
+
+		on(decrease_vol_btn.clicks) do _
+			println("decrease_vol_btn")
+		end
+
 
 		# Custom Slider
 		# Allows to set the value of the slider
@@ -423,7 +445,16 @@ Run a simulation of the IdealGas model.
 				end
 			end
 		end
-
 		playground
 	end
+
+	function increase_vol_const(i::Int = 1)
+		print("increase volume constant")# * i)
+	end
+
+	function decrease_vol_const(i::Int = 1)
+		print("decrease_vol_const") #* i)
+	end 
+	
+
 end	# of module IdealGas
