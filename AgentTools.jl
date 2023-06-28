@@ -214,5 +214,4 @@ function abmplayground(model, initialiser; kwargs...)
 	(playgrnd_fig,abmobs)
 end
 
-
 end # ... of module AgentTools

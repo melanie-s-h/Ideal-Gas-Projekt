@@ -4,14 +4,14 @@
 änderung
 Extending SimpleParticles to conserve kinetic energy and momentum.
 
-Author: Niall Palfreyman, 20/01/23
+Author: Francisco Hella, Felix Rollbühler, Melanie *, Jan Wiechmann, 22/06/23
 """
 module IdealGas
 
 
 include("AgentTools.jl")
 include("TD_Physics.jl")
-using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools, GeometryBasics, Observables, .TD_Physics
+using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools
 
 #-----------------------------------------------------------------------------------------
 # Module types:
@@ -26,10 +26,12 @@ The populating agents in the IdealGas model.
 	speed::Float64					# Particle's speed
 	radius::Float64					# Particle's radius
 	prev_partner::Int				# Previous collision partner id
+	last_bounce::Float64			
 end
 
 "Standard value that is definitely NOT a valid agent ID"
 const non_id = -1
+const R = 8.314 # Gaskonstante in J/(mol·K)
 
 #-----------------------------------------------------------------------------------------
 # Module methods:
@@ -52,61 +54,79 @@ function idealgas(;
 	volume = calc_total_vol_dimension(total_volume), 									# Dimensions of the container
 	topBorder = total_volume/5.0,
 	temp = 293.15,																		# Initial temperature of the gas in Kelvin
+	temp_old = 293.15,###
 	pressure_bar = 1.0,																	# Initial pressure of the gas in bar
 	pressure_pa =  pressure_bar*1e5,													# Initial pressure of the gas in Pascal
 	n_mol = pressure_pa * volume[1] * volume[2] * volume[3] / (8.314*temp),				# Number of mol
 	init_n_mol = copy(n_mol), 															# Initial number of mol
-	real_n_particles = n_mol * 6.022e23,												# Real number of Particles in box
+	real_n_particles = n_mol * 6.022e23/4,												# Real number of Particles in box: Reduction for simplicity
     n_particles = real_n_particles/1e23,												# Number of Particles in simulation box
 	molare_masse = 4.0,																	# Helium Gas mass in atomic mass units
+	mass_u = 4.0,
 	mass_kg = molare_masse * 1.66053906660e-27,											# Convert atomic/molecular mass to kg
 	mass_gas = round(n_mol * molare_masse, digits=3),									# Mass of gas
 	radius = 4.0,																		# Radius of Particles in the box
-	e_inner = 3/2 * real_n_particles * temp * 8.314,									# Inner energy of the gas
-	entropy = 0.0,
+	# U = 3/2 * N(Anzahl Part) * k(Boltzmann) * T = 3/2 * n(mol) * R * T
+	e_internal = 3/2 * n_mol * 8.314 * temp,											# Inner energy of the gas
+	entropy_change = 0.0,																# Change in entropy of the gas
 	extent = (500,500),																	# Extent of Particles space
 )
     space = ContinuousSpace(extent; spacing = radius/2.0)
 
 	properties = Dict(
-		:n_particles		=> n_particles,
-		:temp				=> temp,
-		:e_inner			=> e_inner,
-		:pressure_pa		=> pressure_pa,
-		:pressure_bar		=> pressure_bar,
+		:n_particles	=> n_particles,
+		:temp		=> temp,
+		:temp_old		=> temp_old,
+		:total_volume	=> total_volume,
+		:e_internal	=> e_internal,
+		:entropy_change 	=> entropy_change,
+		:pressure_pa	=> pressure_pa,
+		:pressure_bar	=> pressure_bar,
 		:real_n_particles	=> real_n_particles,
 		:n_mol				=> n_mol,
 		:volume				=> volume,
 		:init_n_mol			=> init_n_mol,
 		:gases				=> gases,
 		:molare_masse		=> molare_masse,
-		:mass_kg			=> mass_kg,
-		:mass_gas			=> mass_gas,
+		:mass_kg		=> mass_kg,
+		:mass_gas	=> mass_gas,
+		:topBorder => topBorder,
+		:step => 0,
 		:modes				=> modes,
 		:mode				=> mode,
-		:topBorder			=> topBorder,
-		:total_volume		=> total_volume,
-		:entropy			=> entropy,
-
-		##
-		:placeholder => 0.0,
 	)
+
 
     box = ABM( Particle, space; properties, scheduler = Schedulers.Randomly())
 
-    k = 1.38e-23  									# Boltzmann constant in J/K
-	max_speed = 1000.0  							# Maximum speed in m/s
+	molare_masse_kg = box.molare_masse / 1000	# Convert g/mol to kg/mol
+	max_speed = 4400.0  # Maximum speed in m/s
 	for _ in 1:n_particles
 		vel = Tuple( 2rand(2).-1)
-		vel = vel ./ norm(vel)  					# ALWAYS maintain normalised state of vel!
-		speed = sqrt((3 * k * box.temp) / mass_kg)  # Initial speed based on temperature
-		speed = scale_speed(speed, max_speed)  		# Scale speed to avoid excessive velocities
-        add_agent!( box, vel, mass_kg, speed, radius, non_id)
+		vel = vel ./ norm(vel)  # ALWAYS maintain normalised state of vel!
+		# uᵣₘₛ = sqrt(3*R*T / M) M in kg/mol
+		speed = sqrt((3 * R * box.temp) / molare_masse_kg)  # Initial speed based on temperature
+		speed = TD_Physics.scale_speed(speed, max_speed)  		# Scale speed to avoid excessive velocities
+		#speed = scale_speed(speed, max_speed)  		# Scale speed to avoid excessive velocities
+        add_agent!( box, vel, mass_kg, speed, radius, non_id, -Inf)
 	end
+
+	
 
     return box
 end
+#TODO: Zur Volumenveränderung zwei Buttons, erhöhen und erniedrigen
+#TODO: Volumenveränderung beschleunigt die Teilchen die gegen die Seite von der Arbeitverrichtet wird
+#-----------------------------------------------------------------------------------------
+"""
+calc_total_vol_dimension( me, box)
 
+Calculates volume/dimension of a 3D-Space with [x, y=5, z=1], based on a given value of total volume.
+"""
+function calc_total_vol_dimension(volume, x_axis_vol=5.0)
+ 	y_axis_vol = volume/x_axis_vol
+ 	return [y_axis_vol, x_axis_vol, 1.0] 
+end
 #-----------------------------------------------------------------------------------------
 """
 	agent_step!( me, box)
@@ -115,34 +135,70 @@ This is the heart of the IdealGas model: It calculates how Particles collide wit
 while conserving momentum and kinetic energy.
 """
 function agent_step!(me::Particle, box::ABM)
-    her = random_nearby_agent(me, box, 2*me.radius)   # Grab nearby particle
-    
-    if her !== nothing && her.id < me.id && her.id != me.prev_partner
-        # New collision partner has not already been handled and is not my previous partner:
-        me.prev_partner = her.id           # Update previous partners to avoid repetitive juddering collisions.
-        her.prev_partner = me.id           # ditto for the other agent.
+	her = random_nearby_agent( me, box, 2*me.radius)	# Grab nearby particle
+	if her === nothing
+		# No new partners - forget previous collision partner:
+		me.prev_partner = non_id
+	elseif her.id < me.id && her.id != me.prev_partner
+		# New collision partner has not already been handled and is not my previous partner:
+		me.prev_partner = her.id							# Update previous partners to avoid
+		her.prev_partner = me.id							# repetitive juddering collisions.
+		cntct = (x->[cos(x),sin(x)])(2rand()pi)				# Unit vector to contact point with partner
+		Rctct = [cntct[1] cntct[2]; -cntct[2] cntct[1]]		# Rotation into contact directn coords
+		Rback = [cntct[1] -cntct[2]; cntct[2] cntct[1]]		# Inverse rotation back to world coords
 
-        # Compute relative position and velocity:
-        rel_pos = me.pos .- her.pos
-        rel_vel = me.vel .- her.vel
+		# Rotate velocities into coordinates directed ALONG and PERPendicular to contact direction:
+		myAlongVel, myPerpVel = me.speed * Rctct * collect(me.vel)					# My velocity
+		herAlongVel, herPerpVel = her.speed * Rctct * collect(her.vel)				# Her velocity
+		cmAlongVel = (me.mass*myAlongVel + her.mass*herAlongVel)/(me.mass+her.mass)	# C of M velocity
 
-        # Compute collision impact vector:
-        distance_sq = sum(rel_pos .^ 2)
-        velocity_dot = sum(rel_vel .* rel_pos)
-        impulse = 2 * me.mass * her.mass / (me.mass + her.mass) * velocity_dot ./ distance_sq .* rel_pos
+		# Calculate collision effects along contact direction (perp direction is unaffected):
+		myAlongVel = 2cmAlongVel - myAlongVel
+		herAlongVel = 2cmAlongVel - herAlongVel
 
-        # Update velocities according to the impulse
-		me.vel = (me.vel[1] - (impulse ./ me.mass)[1], me.vel[2] - (impulse ./ me.mass)[2])
-		her.vel = (her.vel[1] + (impulse ./ her.mass)[1], her.vel[2] + (impulse ./ her.mass)[2])
+		# Rotate collision effects on both me and her back into world coordinates:
+		me.speed = hypot(myAlongVel,myPerpVel)
+		if me.speed != 0.0
+			me.vel = Tuple(Rback*[myAlongVel,myPerpVel])
+			me.vel = me.vel ./ norm(me.vel)
+		end
+		her.speed = hypot(herAlongVel,herPerpVel)
+		if her.speed != 0.0
+			her.vel = Tuple(Rback*[herAlongVel,herPerpVel])
+			her.vel = her.vel ./ norm(her.vel)
+		end
+	end
 
-        # Update speeds based on new velocities
-        me.speed = norm(me.vel)
-        her.speed = norm(her.vel)
+	check_particle_near_border!(me, box)  # Aufruf der neuen Funktion
+		
+	move_agent!(me, box, me.speed)
+end
+#----------------------------------------------------------------------------------------
+
+function check_particle_near_border!(me, box)
+    x, y = me.pos
+
+    if x < 1.8 && box.step - me.last_bounce > 3
+        me.vel = (-me.vel[1], me.vel[2])
+        me.last_bounce = box.step
+    elseif x > box.space.extent[1] - 1.8 && box.step - me.last_bounce > 3
+        me.vel = (-me.vel[1], me.vel[2])
+        me.last_bounce = box.step
+    end
+    if y < 1.8 && box.step - me.last_bounce > 3
+        me.vel = (me.vel[1], -me.vel[2])
+        me.last_bounce = box.step			
+    elseif y > box.space.extent[2] - 1.8 && box.step - me.last_bounce > 3 
+        me.vel = (me.vel[1], -me.vel[2])
+        me.last_bounce = box.step
     end
 
-    move_agent!(me, box, me.speed)
+	# Überprüfen, ob y > 500 und falls ja, setzen Sie y auf 500 und invertieren Sie die y-Geschwindigkeit
+    # if y > 500
+    #     me.pos = (x, 498)
+    #     me.vel = (me.vel[1], -me.vel[2])
+    # end
 end
-
 #-----------------------------------------------------------------------------------------
 """
 	model_step!( model)
@@ -167,8 +223,19 @@ function model_step!(model::ABM)
 		model.temp = round(temp, digits=2)
 	end
 
-	model.entropy = 0.0
-    #model.e_inner = 3/2 * model.real_n_particles * model.temp * 8.314
+	model.entropy_change = calc_entropy_change(model)
+	
+	model.e_internal = calc_internal_energy(model)
+
+	molare_masse_kg = model.molare_masse / 1000	# Convert g/mol to kg/mol
+	max_speed = 4400.0  # Maximum speed in m/s
+	u_rms = sqrt((3 * R * model.temp) / molare_masse_kg)  # Root mean squared speed based on temperature
+	for particle in allagents(model)
+		particle.speed = TD_Physics.scale_speed(u_rms, max_speed)  
+	end
+
+	model.step += 1.0
+
 
 end
 
@@ -186,9 +253,9 @@ Run a simulation of the IdealGas model.
 		box = idealgas()
 		#params = Dict(:temp => 100.0:1.0:1000.0,:total_volume => 0:0.1:30,:placeholder => 0:1:10)
 	
-		entropy(box) = box.entropy
+		entropy(box) = box.entropy_change
 		mdata = [entropy]
-		mlabels = ["Entropie(Platzhalter)"]
+		mlabels = ["ΔS in [J/K] (Entropieänderung)"]
 	
 		playground,abmobs = abmplayground( box, idealgas;
 			agent_step!,
@@ -209,6 +276,8 @@ Run a simulation of the IdealGas model.
 		playground[2,1] = playground.content[2]
 		#playground[2,2] = playground.content[7]
 		slider_space = playground[2,2] = GridLayout()
+		# Buttons to change volume 
+		vol_change_btns = playground[1,1] = GridLayout() 
 		# Buttons
 		gl_buttons = playground[3,1] = GridLayout()
 		gl_buttons[0,2] = playground.content[3]
@@ -226,9 +295,27 @@ Run a simulation of the IdealGas model.
 		pressure_label = Label(gl_labels[2,0], "Druck: " * string(round(box.pressure_bar, digits=2))* " Bar", fontsize=22)
 		mass_label = Label(gl_labels[3,0], "Masse: " * string(box.mass_gas)* " g", fontsize=22)
 		volume_label = Label(gl_labels[1,0], "Volumen: " * string(round(box.total_volume, digits=2))* " m³ ; " * string(round(box.total_volume * 1000, digits=2)) * " L", fontsize=22)
+		e_internal_label = Label(gl_labels[4,0], "Eᵢ: " * string(round(box.e_internal, digits=2)) * " J", fontsize=22)
+		
+		#Custom Buttons
+		increase_vol_btn = Button(vol_change_btns[0,1:2], label = "Increase\nVolumen")# = print("increase"))#increase_vol_const())
+		pause_vol_btn = Button(vol_change_btns[0,3], label = "Pause")
+		decrease_vol_btn = Button(vol_change_btns[0,4:5], label = "Decrease\nVolumen")# = print("decrease"))#decrease_vol_const())
 
-		# Platzhalter Label
-		Label(gl_labels[4,0], "Placeholder", fontsize=22)
+	
+		#TODO: Hier volumen change funktionen aufrufen
+		on(increase_vol_btn.clicks) do _
+			println("increase_vol_btn")
+		end  
+
+		on(pause_vol_btn.clicks) do _
+			println("pause volume change")
+		end 
+
+		on(decrease_vol_btn.clicks) do _
+			println("decrease_vol_btn")
+		end
+
 
 		# Custom Slider
 		# Allows to set the value of the slider
@@ -252,7 +339,7 @@ Run a simulation of the IdealGas model.
 
 
 		on(abmobs.model) do _
-
+			e_internal_label.text[] = string("Eᵢ: ", string(round(box.e_internal)), " J")
 			pressure_label.text[] = string("Druck: ", string(round(box.pressure_bar, digits=2)), " Bar")
 			if box.mass_gas > 999.9
 				mass_label.text[] = string("Masse: ", string(round(box.mass_gas/1000, digits=3), " kg"))
@@ -358,8 +445,16 @@ Run a simulation of the IdealGas model.
 				end
 			end
 		end
-
 		playground
 	end
+
+	function increase_vol_const(i::Int = 1)
+		print("increase volume constant")# * i)
+	end
+
+	function decrease_vol_const(i::Int = 1)
+		print("decrease_vol_const") #* i)
+	end 
+	
 
 end	# of module IdealGas

@@ -2,14 +2,15 @@
 """
 TD_Physics
 
-Custom Library of ThermoDynamics for IdealGas-simulation.
+Costum Library of ThermoDynamics for IdealGas-simulation.
 
-Author: Francisco Hella, Felix Rollbühler, Melanie Heinrich, Jan Wichmann, 20/06/23
+Author: Francisco Hella, Felix Rollbühler, Melanie *, Jan Wiechmann, 20/06/23
 """
 
 module TD_Physics
 
-import Agents
+include("AgentTools.jl")
+using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, GeometryBasics, Observables
 
 export calc_temperature, calc_pressure, calc_n_mol, calc_real_n_particles, momentum, kinetic_energy, scale_speed, calc_total_vol_dimension
 
@@ -24,16 +25,6 @@ function momentum(particle)
 end
 #-----------------------------------------------------------------------------------------
 """
-	kinetic_energy( particle)
-
-Return the kinetic energy of this particle.
-"""
-	function kinetic_energy(particle)
-		particle.mass * particle.speed^2 / 2
-	end
-
-#-----------------------------------------------------------------------------------------
-"""
 	scale_speed(speed, max_speed)
 
 Scales a speed value to the interval [0,1] based on the provided max_speed.
@@ -42,7 +33,7 @@ Scales a speed value to the interval [0,1] based on the provided max_speed.
 		if speed > max_speed
 			speed = max_speed
 		end
-		return speed / max_speed
+		return 3 * speed / max_speed
 	end
 
 #-----------------------------------------------------------------------------------------
@@ -82,7 +73,6 @@ end
 Return the pressure of the system.
 """
 	function calc_pressure(model)
-		R = 8.314 # Gaskonstante in J/(mol·K)
 		n = model.n_mol # Anzahl der Moleküle (angenommen, jedes Partikel repräsentiert ein Molekül)
 		V = model.volume[1] * model.volume[2] * model.volume[3] # Volumen des Behälters
 		T = model.temp # Durchschnittstemperatur der Moleküle
@@ -97,7 +87,6 @@ end #---------------------------------------------------------------------------
 Return the volume of the system.
 """
 function calc_volume(model)
-    R = 8.314 # Gaskonstante in J/(mol·K)
     n = model.n_mol # Anzahl der Moleküle (angenommen, jedes Partikel repräsentiert ein Molekül)
     T = model.temp # Durchschnittstemperatur der Moleküle
     P = model.pressure_pa
@@ -112,13 +101,46 @@ end
 Return the temperature of the system.
 """
 	function calc_temperature(model)   
-		# T = Ekin / (k * 2/3 * N ); Boltzmann constant k = 1.38e-23
 		P = model.pressure_pa
-		R = 8.314 # Gaskonstante in J/(mol·K)
 		n = model.n_mol # Anzahl der Moleküle
 		V = model.volume[1] * model.volume[2] * model.volume[3]
 		T = (P*V)/(R*n)
 		return T
+	end
+
+#------------------------------------------------------------------------------------------
+"""
+	calc_entropy_change
+
+Return the change in entropy of the system.
+"""
+	function calc_entropy_change(model)   
+		# Specific heat capacity depending on the thermodynamic process 
+		if model.mode == "druck-temp" || model.mode == "temp-druck"	# Isochor
+			# Cᵥ = 3/2 * R (monoatomic)												# TODO:Freiheitsgrade miteinbeziehen?-> Cᵥ = 5/2 * R (diatomic) 
+			C = 3/2 * R
+		elseif model.mode == "vol-temp" || model.mode == "temp-vol"	# Isobar						
+			# Cₚ = 5/2 * R (monoatomic)												# TODO: Cₚ = 7/2 * R (diatomic)	
+			C = 5/2 * R
+		else				# Isothermal process: No change in entropy
+			return 0.0
+		end
+		Δtemp = model.temp - model.temp_old			# ΔT = T₂ - T₁
+		ΔQ = model.n_mol * C * Δtemp				# ΔQ = n * C * ΔT (Heat Exchange)
+		ΔS = ΔQ / model.temp						# ΔS = ΔQ / T	(Change in Entropy)
+		model.temp_old = model.temp
+		return ΔS
+	end
+
+#------------------------------------------------------------------------------------------
+"""
+	calc_internal_energy
+
+Return the internal energy of the system.
+"""
+	function calc_internal_energy(model)  
+		# Eᵢ = 3/2 * n * R * T (monoatomic) 
+		3/2 * model.n_mol * R * model.temp 			#TODO: Eᵢ = 5/2 * n * R * T (diatomic)
 	end
 
 #------------------------------------------------------------------------------------------
