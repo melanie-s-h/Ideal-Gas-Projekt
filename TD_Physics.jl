@@ -12,7 +12,7 @@ module TD_Physics
 include("AgentTools.jl")
 using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, GeometryBasics, Observables
 
-export calc_temperature, calc_pressure, calc_n_mol, calc_real_n_particles, momentum, kinetic_energy, scale_speed, calc_total_vol_dimension
+export calc_temperature, calc_pressure, calc_n_mol, calc_real_n_particles, momentum, kinetic_energy, scale_speed, scale_agent_speed, calc_total_vol_dimension
 
 const R = 8.314
 #-----------------------------------------------------------------------------------------
@@ -30,14 +30,26 @@ end
 
 Scales a speed value to the interval [0,1] based on the provided max_speed.
 """
+	function scale_agent_speed(model)
+		u_rms = sqrt((3 * R * model.temp) / (model.molar_mass / 1000))  # Root mean squared speed based on temperature uᵣₘₛ = sqrt(3*R*T / M)
+		for particle in allagents(model)
+			particle.speed = scale_speed(u_rms, model.max_speed)
+		end
+	end
+
+#-----------------------------------------------------------------------------------------
+
+"""
+	scale_speed(agent, max_speed)
+
+Scales a speed value to the interval [0,1] based on the provided max_speed.
+"""
 	function scale_speed(speed, max_speed)
 		if speed > max_speed
 			speed = max_speed
 		end
-		return 3 * speed / max_speed
+		return 5 * speed / max_speed
 	end
-
-#-----------------------------------------------------------------------------------------
 """
 	calc_n_mol(model)
 
