@@ -1,17 +1,17 @@
 #========================================================================================#
 """
 	IdealGas
-änderung
+
 Extending SimpleParticles to conserve kinetic energy and momentum.
 
-Author: Francisco Hella, Felix Rollbühler, Melanie *, Jan Wiechmann, 22/06/23
+Author: Francisco Hella, Felix Rollbühler, Melanie Heinrich, Jan Wichmann, 22/06/23
 """
 module IdealGas
 
 
 include("AgentTools.jl")
 include("TD_Physics.jl")
-using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools
+using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools, .TD_Physics
 
 #-----------------------------------------------------------------------------------------
 # Module types:
@@ -54,7 +54,6 @@ function idealgas(;
 	volume = calc_total_vol_dimension(total_volume), 									# Dimensions of the container
 	topBorder = total_volume/5.0,
 	temp = 293.15,																		# Initial temperature of the gas in Kelvin
-	temp_old = 293.15,###
 	pressure_bar = 1.0,																	# Initial pressure of the gas in bar
 	pressure_pa =  pressure_bar*1e5,													# Initial pressure of the gas in Pascal
 	n_mol = pressure_pa * volume[1] * volume[2] * volume[3] / (8.314*temp),				# Number of mol
@@ -66,8 +65,7 @@ function idealgas(;
 	mass_kg = molare_masse * 1.66053906660e-27,											# Convert atomic/molecular mass to kg
 	mass_gas = round(n_mol * molare_masse, digits=3),									# Mass of gas
 	radius = 4.0,																		# Radius of Particles in the box
-	# U = 3/2 * N(Anzahl Part) * k(Boltzmann) * T = 3/2 * n(mol) * R * T
-	e_internal = 3/2 * n_mol * 8.314 * temp,											# Inner energy of the gas
+	e_internal = 3/2 * n_mol * 8.314 * temp,											# Internal energy of the gas
 	entropy_change = 0.0,																# Change in entropy of the gas
 	extent = (500,500),																	# Extent of Particles space
 )
@@ -104,10 +102,8 @@ function idealgas(;
 	for _ in 1:n_particles
 		vel = Tuple( 2rand(2).-1)
 		vel = vel ./ norm(vel)  # ALWAYS maintain normalised state of vel!
-		# uᵣₘₛ = sqrt(3*R*T / M) M in kg/mol
 		speed = sqrt((3 * R * box.temp) / molare_masse_kg)  # Initial speed based on temperature
-		speed = TD_Physics.scale_speed(speed, max_speed)  		# Scale speed to avoid excessive velocities
-		#speed = scale_speed(speed, max_speed)  		# Scale speed to avoid excessive velocities
+		speed = scale_speed(speed, max_speed)  				# Scale speed to avoid excessive velocities
         add_agent!( box, vel, mass_kg, speed, radius, non_id, -Inf)
 	end
 
@@ -229,9 +225,9 @@ function model_step!(model::ABM)
 
 	molare_masse_kg = model.molare_masse / 1000	# Convert g/mol to kg/mol
 	max_speed = 4400.0  # Maximum speed in m/s
-	u_rms = sqrt((3 * R * model.temp) / molare_masse_kg)  # Root mean squared speed based on temperature
+	u_rms = sqrt((3 * R * model.temp) / molare_masse_kg)  # Root mean squared speed based on temperature uᵣₘₛ = sqrt(3*R*T / M)
 	for particle in allagents(model)
-		particle.speed = TD_Physics.scale_speed(u_rms, max_speed)  
+		particle.speed = scale_speed(u_rms, max_speed)  
 	end
 
 	model.step += 1.0
@@ -256,6 +252,11 @@ Run a simulation of the IdealGas model.
 		entropy(box) = box.entropy_change
 		mdata = [entropy]
 		mlabels = ["ΔS in [J/K] (Entropieänderung)"]
+
+		# Resolution of Makie Window based on monitor size 
+		monitor = GLMakie.GLFW.GetPrimaryMonitor()
+		width = GLMakie.MonitorProperties(monitor).videomode.width
+		height = GLMakie.MonitorProperties(monitor).videomode.height
 	
 		playground,abmobs = abmplayground( box, idealgas;
 			agent_step!,
@@ -263,9 +264,9 @@ Run a simulation of the IdealGas model.
 			mdata,
 			mlabels,
 			#params,
-			figure = (; resolution = (1300, 750)),
+			figure = (; resolution = (width*0.75, height*0.75)),
 			ac = :skyblue3,
-			as = 8.0
+			as = 12.0
 		)
 		# Figure Objekten neues Layout zuweisen durch feste Reihenfolge in figure.content[i]
 		model_plot = playground.content[1]	# Box 	

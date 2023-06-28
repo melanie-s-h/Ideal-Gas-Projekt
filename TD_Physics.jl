@@ -14,6 +14,7 @@ using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, GeometryBasics, Obser
 
 export calc_temperature, calc_pressure, calc_n_mol, calc_real_n_particles, momentum, kinetic_energy, scale_speed, calc_total_vol_dimension
 
+const R = 8.314
 #-----------------------------------------------------------------------------------------
 """
 	momentum( particle)
