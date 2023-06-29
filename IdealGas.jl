@@ -222,6 +222,43 @@ Run a simulation of the IdealGas model.
 
 
 	function demo()
+		
+		function set_slider(value, slider, slider_value, unit)
+			slider_value.text[] = string(round(value, digits=2), " ", unit)
+			set_close_to!(slider, round(value, digits=2))
+		end
+
+		function add_or_remove_agents!(model)
+			if model.n_particles_old < model.n_particles
+
+				for _ in model.n_particles_old:model.n_particles
+					vel = Tuple( 2rand(2).-1)
+					vel = vel ./ norm(vel)  # ALWAYS maintain normalised state of vel!
+					speed = sqrt((3 * R * model.temp) / model.molar_mass / 1000)  # Initial speed based on temperature (molar_mass converted to kg/mol)
+					speed = scale_speed(speed, model.max_speed)  				# Scale speed to avoid excessive velocities
+					add_agent!( model, vel, model.mass_kg, speed, model.radius, non_id, -Inf)
+				end
+		
+				model.n_particles_old = model.n_particles
+		
+			elseif model.n_particles_old > model.n_particles
+		
+				for _ in model.n_particles:model.n_particles_old
+					agent = random_agent(model)
+					kill_agent!(agent, model)
+				end
+		
+				model.n_particles_old = model.n_particles
+			end
+		end
+
+		function create_custom_slider(slider_space, row_num, labeltext, fontsize, range, unit, startvalue)
+			label = Label(slider_space[row_num, 0], labeltext, fontsize=fontsize)
+			slider = Slider(slider_space[row_num, 1], range=range, startvalue=startvalue)
+			slider_value = Label(slider_space[row_num, 2], string(slider.value[]) * " " * unit)
+			return label, slider, slider_value
+		end
+		
 		model = idealgas()
 		#params = Dict(:temp => 100.0:1.0:1000.0,:total_volume => 0:0.1:30,:placeholder => 0:1:10)
 	
@@ -304,27 +341,13 @@ Run a simulation of the IdealGas model.
 		slider_multiplier_max = 1.5
 		slider_step_quotient = 100.0
 
-		temp_slider_label = Label(slider_space[0,0], "Temperatur: ", fontsize=16)
-		temp_slider = Slider(slider_space[0,1], range = model.temp * slider_multiplier_min:model.temp/slider_step_quotient:model.temp * slider_multiplier_max, startvalue=293.15)
-		temp_slider_value = Label(slider_space[0,2], string(temp_slider.value[]) * " K")
+		temp_slider_label, temp_slider, temp_slider_value = create_custom_slider(slider_space, 0, "Temperatur: ", 16, model.temp*slider_multiplier_min:model.temp/slider_step_quotient:model.temp*slider_multiplier_max, "K", model.temp)
+		pressure_slider_bar_label, pressure_slider_bar, pressure_slider_bar_value = create_custom_slider(slider_space, 1, "Druck[Bar]: ", 16, model.pressure_bar*slider_multiplier_min:model.pressure_bar/slider_step_quotient:model.pressure_bar*slider_multiplier_max, "Bar", model.pressure_bar)
+		pressure_slider_pa_label, pressure_slider_pa, pressure_slider_pa_value = create_custom_slider(slider_space, 2, "Druck[Pa]: ", 16, model.pressure_pa*slider_multiplier_min:model.pressure_pa/slider_step_quotient:model.pressure_pa*slider_multiplier_max, "Pa", model.pressure_pa)
+		volume_slider_label, volume_slider, volume_slider_value = create_custom_slider(slider_space, 3, "Volumen: ", 16, model.total_volume*slider_multiplier_min:model.total_volume/slider_step_quotient:model.total_volume*slider_multiplier_max, "m³", model.total_volume)
+		n_mol_slider_label, n_mol_slider, n_mol_slider_value = create_custom_slider(slider_space, 4, "Stoffmenge: ", 16, model.n_mol*slider_multiplier_min:model.n_mol/slider_step_quotient:model.n_mol*slider_multiplier_max, "mol", model.n_mol)
 
-
-		pressure_slider_bar_label = Label(slider_space[1,0], "Druck: ", fontsize=16)
-		pressure_slider_bar = Slider(slider_space[1,1], range = model.pressure_bar*slider_multiplier_min:model.pressure_bar/slider_step_quotient:model.pressure_bar*slider_multiplier_max, startvalue=1.0)
-		pressure_slider_bar_value = Label(slider_space[1,2], string(pressure_slider_bar.value[]) * " Bar")
-
-		pressure_slider_pa_label = Label(slider_space[2,0], "Druck: ", fontsize=16)
-		pressure_slider_pa = Slider(slider_space[2,1], range = model.pressure_pa*slider_multiplier_min:model.pressure_pa/slider_step_quotient:model.pressure_pa*slider_multiplier_max, startvalue=model.pressure_pa)
-		pressure_slider_pa_value = Label(slider_space[2,2], string(pressure_slider_pa.value[]) * " Pa")
-
-		volume_slider_label = Label(slider_space[3,0], "Volumen: ", fontsize=16)
-		volume_slider = Slider(slider_space[3,1], range = float(model.total_volume*slider_multiplier_min):model.total_volume/slider_step_quotient:float(model.total_volume*slider_multiplier_max), startvalue=model.total_volume)
-		volume_slider_value = Label(slider_space[3,2], string(round(volume_slider.value[], digits=2)) * " m³")
-
-		n_mol_slider_label = Label(slider_space[4,0], "Teilchen: ", fontsize=16)
-		n_mol_slider = Slider(slider_space[4,1], range = model.n_mol*slider_multiplier_min:model.n_mol/slider_step_quotient:model.n_mol*slider_multiplier_max, startvalue=model.n_mol)
-		n_mol_slider_value = Label(slider_space[4,2], string(round(n_mol_slider.value[], digits=2)) * " mol")
-
+		is_updating = false
 
 		on(abmobs.model) do _
 			e_internal_label.text[] = string("Eᵢ: ", string(round(model.e_internal)), " J")
@@ -353,126 +376,120 @@ Run a simulation of the IdealGas model.
 		# on change of temperature slider
 		on(temp_slider.value) do temp
 			if model.mode == "temp-druck" || model.mode == "temp-vol"
-				temp_slider_value.text[] = string(round(temp[], digits=2)) * " K"
 				model.temp = temp[]
+				temp_slider_value.text[] = string(round(temp[], digits=2)) * " K"
 			end
 			
 			# If the mode is "temp-druck" the pressure is calculated
 			if model.mode == "temp-druck"
-				pressure = calc_pressure(model)
-				pressure_slider_pa_value.text[] = string(round(pressure, digits=0)) * " Pa"
-				model.pressure_pa = pressure
-				set_close_to!(pressure_slider_pa, pressure)
-				pressure_slider_bar_value.text[] = string(round(pressure / 1e5, digits=2)) * " Bar"
-				model.pressure_bar = pressure / 1e5
-				set_close_to!(pressure_slider_bar, pressure / 1e5)
+				model.pressure_pa = calc_pressure(model)
+				model.pressure_bar = model.pressure_pa / 1e5
+				set_slider(model.pressure_pa, pressure_slider_pa, pressure_slider_pa_value, "Pa")
+				set_slider(model.pressure_bar, pressure_slider_bar, pressure_slider_bar_value, "Bar")
 
 				# set the range of the sliders
-				pressure_slider_pa.range = pressure * slider_multiplier_min:pressure/slider_step_quotient:pressure * slider_multiplier_max
-				pressure_slider_bar.range = pressure / 1e5 * slider_multiplier_min:pressure / 1e5 / slider_step_quotient:pressure / 1e5 * slider_multiplier_max
+				pressure_slider_pa.range = model.pressure_pa * slider_multiplier_min:model.pressure_pa/slider_step_quotient:model.pressure_pa * slider_multiplier_max
+				pressure_slider_bar.range = model.pressure_bar * slider_multiplier_min:model.pressure_bar / slider_step_quotient:model.pressure_bar * slider_multiplier_max
 
 			# If the mode is "temp-vol" the volume is calculated
 			elseif model.mode == "temp-vol"
-				volume = model.n_mol * 8.314 * model.temp/ model.pressure_pa
-				volume_slider_value.text[] = string(round(volume, digits=2)) * " m³"
-				set_close_to!(volume_slider, volume)
+				model.total_volume = calc_volume(model)
+				set_slider(model.total_volume, volume_slider, volume_slider_value, "m³")
+				model.volume = calc_total_vol_dimension(model.total_volume)
 
 				# set the range of the sliders
-				volume_slider.range = model.volume * slider_multiplier_min:model.volume/slider_step_quotient:model.volume * slider_multiplier_max
+				volume_slider.range = model.total_volume * slider_multiplier_min:model.total_volume/slider_step_quotient:model.total_volume * slider_multiplier_max
 			end
 		end
 
 		# on change of pressure bar slider
 		on(pressure_slider_bar.value) do pressure
+			if is_updating
+				return
+			end
+			is_updating = true
 			if model.mode == "druck-vol" || model.mode == "druck-temp"
-				pressure_slider_bar_value.text[] = string(round(pressure[], digits=2)) * " Bar"
 				model.pressure_bar = pressure[]
-
-				pressure_slider_pa_value.text[] = string(round(pressure[] * 1e5, digits=0)) * " Pa"
-				set_close_to!(pressure_slider_pa, round(pressure[] * 1e5), digits=0)
 				model.pressure_pa = pressure[] * 1e5
+				pressure_slider_bar_value.text[] = string(round(model.pressure_bar, digits=2)) * " Bar"
+				set_slider(model.pressure_pa , pressure_slider_pa, pressure_slider_pa_value, "Pa")
 				
 				# If the mode is "druck-vol" the volume is calculated
 				if model.mode == "druck-vol"
-					volume = model.n_mol * 8.314 * model.temp/ model.pressure_pa
-					volume_slider_value.text[] = string(round(volume, digits=2)) * " m³"
-					set_close_to!(volume_slider, volume)
+					model.total_volume = calc_volume(model)
+					set_slider(model.total_volume, volume_slider, volume_slider_value, "m³")
+					model.volume = calc_total_vol_dimension(model.total_volume)
 
 					# set the range of the sliders
-					volume_slider.range = model.volume * slider_multiplier_min:model.volume/slider_step_quotient:model.volume * slider_multiplier_max
-
+					volume_slider.range = model.total_volume * slider_multiplier_min:model.total_volume/slider_step_quotient:model.total_volume * slider_multiplier_max
 				# If the mode is "druck-temp" the temperature is calculated
 				elseif model.mode == "druck-temp"
-					temp = calc_temperature(model)
-					temp_slider_value.text[] = string(round(temp, digits=2)) * " K"
-					set_close_to!(temp_slider, temp)
+					model.temp = calc_temperature(model)
+					set_slider(model.temp, temp_slider, temp_slider_value, "K")
 
 					# set the range of the sliders
 					temp_slider.range = model.temp * slider_multiplier_min:model.temp/slider_step_quotient:model.temp * slider_multiplier_max
 
 				end
-
 			end
+			is_updating = false
 		end
 
 		# on change of pressure pa slider
 		on(pressure_slider_pa.value) do pressure
+			if is_updating
+				return
+			end
+			is_updating = true
 			if model.mode == "druck-vol" || model.mode == "druck-temp"
-				pressure_slider_pa_value.text[] = string(round(pressure[], digits=0)) * " Pa"
 				model.pressure_pa = pressure[]
-
-				pressure_slider_bar_value.text[] = string(round(pressure[] / 1e5, digits=2)) * " Bar"
-				set_close_to!(pressure_slider_bar, round(pressure[] / 1e5), digits=2)
 				model.pressure_bar = pressure[] / 1e5
+				pressure_slider_pa_value.text[] = string(round(model.pressure_pa, digits=2)) * " Pa"
+				set_slider(model.pressure_bar, pressure_slider_bar, pressure_slider_bar_value, "Bar")
 
 				# If the mode is "druck-vol" the volume is calculated
 				if model.mode == "druck-vol"
-					volume = model.n_mol * 8.314 * model.temp/ model.pressure_pa
-					volume_slider_value.text[] = string(round(volume, digits=2)) * " m³"
-					set_close_to!(volume_slider, volume)
+					model.total_volume = calc_volume(model)
+					set_slider(model.total_volume, volume_slider, volume_slider_value, "m³")
+					model.volume = calc_total_vol_dimension(model.total_volume)
 
 					# set the range of the sliders
-					volume_slider.range = model.volume * slider_multiplier_min:model.volume/slider_step_quotient:model.volume * slider_multiplier_max
-
+					volume_slider.range = model.total_volume * slider_multiplier_min:model.total_volume/slider_step_quotient:model.total_volume * slider_multiplier_max
 				# If the mode is "druck-temp" the temperature is calculated
 				elseif model.mode == "druck-temp"
-					temp = calc_temperature(model)
-					temp_slider_value.text[] = string(round(temp, digits=2)) * " K"
-					set_close_to!(temp_slider, temp)
+					model.temp = calc_temperature(model)
+					set_slider(model.temp, temp_slider, temp_slider_value, "K")
 
 					# set the range of the sliders
 					temp_slider.range = model.temp * slider_multiplier_min:model.temp/slider_step_quotient:model.temp * slider_multiplier_max
 
 				end
-
 			end
+			is_updating = false
 		end
 
 		# on change of volume slider
 		on(volume_slider.value) do volume
 			if model.mode == "vol-druck" || model.mode == "vol-temp"
-				volume_slider_value.text[] = string(round(volume[], digits=2)) * " m³"
 				model.total_volume = volume[]
+				volume_slider_value.text[] = string(round(volume[], digits=2)) * " m³"
+				model.volume = calc_total_vol_dimension(model.total_volume)
 
 				# If the mode is "vol-druck" the pressure is calculated
 				if model.mode == "vol-druck"
-					pressure = calc_pressure(model)
-					pressure_slider_pa_value.text[] = string(round(pressure, digits=0)) * " Pa"
-					model.pressure_pa = pressure[]
-					set_close_to!(pressure_slider_bar, pressure[] / 1e5)
-					pressure_slider_bar_value.text[] = string(round(pressure / 1e5, digits=2)) * " Bar"
-					model.pressure_bar = pressure / 1e5
-					set_close_to!(pressure_slider_pa, pressure)
+					model.pressure_pa = calc_pressure(model)
+					model.pressure_bar = model.pressure_pa / 1e5
+					set_slider(pressure, pressure_slider_pa, pressure_slider_pa_value, "Pa")
+					set_slider(pressure / 1e5, pressure_slider_bar, pressure_slider_bar_value, "Bar")
 
 					# set the range of the sliders
-					pressure_slider_pa.range = pressure * slider_multiplier_min:pressure/slider_step_quotient:pressure * slider_multiplier_max
-					pressure_slider_bar.range = pressure / 1e5 * slider_multiplier_min:pressure / 1e5 / slider_step_quotient:pressure / 1e5 * slider_multiplier_max
+					pressure_slider_pa.range = model.pressure_pa * slider_multiplier_min:model.pressure_pa/slider_step_quotient:model.pressure_pa * slider_multiplier_max
+					pressure_slider_bar.range = model.pressure_bar * slider_multiplier_min:model.pressure_bar / slider_step_quotient:model.pressure_bar * slider_multiplier_max
 
 				# If the mode is "vol-temp" the temperature is calculated
 				elseif model.mode == "vol-temp"
-					temp = calc_temperature(model)
-					temp_slider_value.text[] = string(round(temp, digits=2)) * " K"
-					set_close_to!(temp_slider, temp)
+					model.temp = calc_temperature(model)
+					set_slider(model.temp, temp_slider, temp_slider_value, "K")
 
 					# set the range of the sliders
 					temp_slider.range = model.temp * slider_multiplier_min:model.temp/slider_step_quotient:model.temp * slider_multiplier_max
@@ -484,38 +501,15 @@ Run a simulation of the IdealGas model.
 		# on change of n_mol slider
 		on(n_mol_slider.value) do n_mol
 			if model.mode == "mol-temp" || model.mode == "mol-druck"
-				n_mol_slider_value.text[] = string(round(n_mol[], digits=2)) * " mol"
 				model.n_mol = n_mol[]
+				n_mol_slider_value.text[] = string(round(n_mol[], digits=2)) * " mol"
 				model.n_particles = model.n_mol * 6.022e23 / 1e22 / 8
-
-				# If the number of particles has changed, agents are added or removed
-				if model.n_particles_old < model.n_particles
-
-					for _ in model.n_particles_old:model.n_particles
-						vel = Tuple( 2rand(2).-1)
-						vel = vel ./ norm(vel)  # ALWAYS maintain normalised state of vel!
-						speed = sqrt((3 * R * model.temp) / model.molar_mass / 1000)  # Initial speed based on temperature (molar_mass converted to kg/mol)
-						speed = scale_speed(speed, model.max_speed)  				# Scale speed to avoid excessive velocities
-						add_agent!( model, vel, model.mass_kg, speed, model.radius, non_id, -Inf)
-					end
-			
-					model.n_particles_old = model.n_particles
-			
-				elseif model.n_particles_old > model.n_particles
-			
-					for _ in model.n_particles:model.n_particles_old
-						agent = random_agent(model)
-						kill_agent!(agent, model)
-					end
-			
-					model.n_particles_old = model.n_particles
-				end
+				add_or_remove_agents!(model)				
 
 				# If the mode is "n_mol-temp" the temperature is calculated
 				if model.mode == "mol-temp"
-					temp = calc_temperature(model)
-					temp_slider_value.text[] = string(round(temp, digits=2)) * " K"
-					set_close_to!(temp_slider, temp)
+					model.temp = calc_temperature(model)
+					set_slider(model.temp, temp_slider, temp_slider_value, "K")
 
 					# set the range of the sliders
 					temp_slider.range = model.temp * slider_multiplier_min:model.temp/slider_step_quotient:model.temp * slider_multiplier_max
@@ -523,17 +517,14 @@ Run a simulation of the IdealGas model.
 
 				# If the mode is "n_mol-druck" the pressure is calculated
 				elseif model.mode == "mol-druck"
-					pressure = calc_pressure(model)
-					pressure_slider_pa_value.text[] = string(round(pressure, digits=0)) * " Pa"
-					model.pressure_pa = pressure[]
-					set_close_to!(pressure_slider_bar, pressure[] / 1e5)
-					pressure_slider_bar_value.text[] = string(round(pressure / 1e5, digits=2)) * " Bar"
-					model.pressure_bar = pressure / 1e5
-					set_close_to!(pressure_slider_pa, pressure)
+					model.pressure_pa = calc_pressure(model)
+					model.pressure_bar = model.pressure_pa / 1e5
+					set_slider(model.pressure_pa, pressure_slider_pa, pressure_slider_pa_value, "Pa")
+					set_slider(model.pressure_bar, pressure_slider_bar, pressure_slider_bar_value, "Bar")
 
 					# set the range of the sliders
-					pressure_slider_pa.range = pressure * slider_multiplier_min:pressure/slider_step_quotient:pressure * slider_multiplier_max
-					pressure_slider_bar.range = pressure / 1e5 * slider_multiplier_min:pressure / 1e5 / slider_step_quotient:pressure / 1e5 * slider_multiplier_max
+					pressure_slider_pa.range = model.pressure_pa * slider_multiplier_min:model.pressure_pa/slider_step_quotient:model.pressure_pa * slider_multiplier_max
+					pressure_slider_bar.range = model.pressure_bar * slider_multiplier_min:model.pressure_bar / slider_step_quotient:model.pressure_bar * slider_multiplier_max
 				end
 			end
 		end

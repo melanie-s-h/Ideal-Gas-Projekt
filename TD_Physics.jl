@@ -56,7 +56,7 @@ Scales a speed value to the interval [0,1] based on the provided max_speed.
 Return the number of molecules in the system.
 """
 	function calc_n_mol(model)
-		return model.pressure_bar * 1e5 * model.volume[1] * model.volume[2] * model.volume[3] / (8.314*model.temp)
+		return model.pressure_bar * 1e5 * model.total_volume / (8.314*model.temp)
 	end
 
 #------------------------------------------------------------------------------------------
@@ -87,7 +87,7 @@ Return the pressure of the system.
 """
 	function calc_pressure(model)
 		n = model.n_mol # Anzahl der Moleküle (angenommen, jedes Partikel repräsentiert ein Molekül)
-		V = model.volume[1] * model.volume[2] * model.volume[3] # Volumen des Behälters
+		V = model.total_volume # Volumen des Behälters
 		T = model.temp # Durchschnittstemperatur der Moleküle
 		P = n * R * T / V
 		return P
@@ -116,7 +116,7 @@ Return the temperature of the system.
 	function calc_temperature(model)   
 		P = model.pressure_pa
 		n = model.n_mol # Anzahl der Moleküle
-		V = model.volume[1] * model.volume[2] * model.volume[3]
+		V = model.total_volume
 		T = (P*V)/(R*n)
 		return T
 	end
