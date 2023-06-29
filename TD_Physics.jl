@@ -12,7 +12,7 @@ module TD_Physics
 include("AgentTools.jl")
 using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, GeometryBasics, Observables
 
-export calc_temperature, calc_pressure, calc_n_mol, calc_real_n_particles, momentum, kinetic_energy, scale_speed, scale_agent_speed, calc_total_vol_dimension
+export calc_temperature, calc_pressure, calc_n_mol, calc_real_n_particles, momentum, kinetic_energy, scale_speed, calc_and_scale_speed, calc_total_vol_dimension
 
 const R = 8.314
 #-----------------------------------------------------------------------------------------
@@ -26,20 +26,6 @@ function momentum(particle)
 end
 #-----------------------------------------------------------------------------------------
 """
-	scale_speed(speed, max_speed)
-
-Scales a speed value to the interval [0,1] based on the provided max_speed.
-"""
-	function scale_agent_speed(model)
-		u_rms = sqrt((3 * R * model.temp) / (model.molar_mass / 1000))  # Root mean squared speed based on temperature uᵣₘₛ = sqrt(3*R*T / M)
-		for particle in allagents(model)
-			particle.speed = scale_speed(u_rms, model.max_speed)
-		end
-	end
-
-#-----------------------------------------------------------------------------------------
-
-"""
 	scale_speed(agent, max_speed)
 
 Scales a speed value to the interval [0,1] based on the provided max_speed.
@@ -48,8 +34,9 @@ Scales a speed value to the interval [0,1] based on the provided max_speed.
 		if speed > max_speed
 			speed = max_speed
 		end
-		return 5 * speed / max_speed
+		return 8 * speed / max_speed
 	end
+#------------------------------------------------------------------------------------------
 """
 	calc_n_mol(model)
 
@@ -154,6 +141,20 @@ Return the internal energy of the system.
 	function calc_internal_energy(model)  
 		# Eᵢ = 3/2 * n * R * T (monoatomic) 
 		3/2 * model.n_mol * R * model.temp 			#TODO: Eᵢ = 5/2 * n * R * T (diatomic)
+	end
+
+#------------------------------------------------------------------------------------------
+"""
+	calc_and_scale_speed(model)
+
+Return the scaled root mean squared speed of the particles based on temperature.
+"""
+	function calc_and_scale_speed(model)  
+		max_speed = 4400.0 #TODO: max speed auswählen 			# Maximum speed in m/s
+		molare_masse_kg = model.molar_mass / 1000				# Convert g/mol to kg/mol
+		speed = sqrt((3 * R * model.temp) / molare_masse_kg)  	# Root mean squared speed based on temperature uᵣₘₛ = sqrt(3*R*T / M)
+		scaled_speed = scale_speed(speed, max_speed)  			# Scale speed to avoid excessive velocities
+		return scaled_speed
 	end
 
 #------------------------------------------------------------------------------------------

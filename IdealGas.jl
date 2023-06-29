@@ -57,7 +57,7 @@ function idealgas(;
 	volume 					= calc_total_vol_dimension(total_volume), 							# Dimensions of the container
 	topBorder 				= total_volume/5.0,													# Top border of the container
 	temp 					= 293.15,															# Initial temperature of the gas in Kelvin
-	temp_old 				= 293.15,															# Old temperature of the gas in Kelvin
+	temp_old 				= 293.15,															# Temperature of the previous step in Kelvin
 	pressure_bar 			= 1.0,																# Initial pressure of the gas in bar
 	pressure_pa 			= pressure_bar*1e5,													# Initial pressure of the gas in Pascal
 	n_mol 					= pressure_pa * total_volume / (8.314*temp),						# Number of mol
@@ -71,18 +71,20 @@ function idealgas(;
 	radius 					= 8.0,																# Radius of Particles in the model
 	e_internal 				= 3/2 * n_mol * 8.314 * temp,										# Internal energy of the gas
 	entropy_change 			= 0.0,																# Change in entropy of the gas
+	old_scaled_speed 		= 0.0,																# Scaled speed of the previous step
 	step 					= 0,																# Step counter
 	max_speed 				= 8000.0,  															# Maximum speed of the particles in m/s
 	extent 					= (500,500),														# Extent of Particles space
 )
     space = ContinuousSpace(extent; spacing = 2.5)												# Create the space for the particles
 
-	properties = Dict(																			
-		:n_particles		=> n_particles,
-		:temp				=> temp,
-		:temp_old			=> temp_old,
-		:total_volume		=> total_volume,
-		:e_internal			=> e_internal,
+	properties = Dict(
+		:n_particles	=> n_particles,
+		:temp		=> temp,
+		:temp_old		=> temp_old,
+		:total_volume	=> total_volume,
+		:e_internal	=> e_internal,
+		:old_scaled_speed => old_scaled_speed,
 		:entropy_change 	=> entropy_change,
 		:pressure_pa		=> pressure_pa,
 		:pressure_bar		=> pressure_bar,
@@ -106,12 +108,12 @@ function idealgas(;
 
     model = ABM( Particle, space; properties, scheduler = Schedulers.Randomly())
 
+	scaled_speed = calc_and_scale_speed(model)
+	model.old_scaled_speed = scaled_speed
 	for _ in 1:n_particles
 		vel = Tuple( 2rand(2).-1)
 		vel = vel ./ norm(vel)  # ALWAYS maintain normalised state of vel!
-		speed = sqrt((3 * R * model.temp) / (model.molar_mass / 1000))  # Initial speed based on temperature
-		speed = scale_speed(speed, max_speed)  				# Scale speed to avoid excessive velocities
-        add_agent!( model, vel, mass_kg, speed, radius, non_id, -Inf)
+        add_agent!( model, vel, mass_kg, scaled_speed, radius, non_id, -Inf)
 	end
 
     return model
@@ -200,11 +202,15 @@ end
 """
 function model_step!(model::ABM)
 
-	scale_agent_speed(model) # Scale speed to avoid excessive velocities
-
 	model.entropy_change = calc_entropy_change(model)
-	
 	model.e_internal = calc_internal_energy(model)
+
+	scaled_speed = calc_and_scale_speed(model)
+	for particle in allagents(model)
+		# If particles were slowed down/speed up by decreasing/increasing volume, keep the difference 
+		particle.speed = scaled_speed + (particle.speed - model.old_scaled_speed)
+	end
+	model.old_scaled_speed = scaled_speed
 
 	model.step += 1.0
 
@@ -230,13 +236,11 @@ Run a simulation of the IdealGas model.
 
 		function add_or_remove_agents!(model)
 			if model.n_particles_old < model.n_particles
-
+				scaled_speed = calc_and_scale_speed(model)
 				for _ in model.n_particles_old:model.n_particles
 					vel = Tuple( 2rand(2).-1)
 					vel = vel ./ norm(vel)  # ALWAYS maintain normalised state of vel!
-					speed = sqrt((3 * R * model.temp) / model.molar_mass / 1000)  # Initial speed based on temperature (molar_mass converted to kg/mol)
-					speed = scale_speed(speed, model.max_speed)  				# Scale speed to avoid excessive velocities
-					add_agent!( model, vel, model.mass_kg, speed, model.radius, non_id, -Inf)
+					add_agent!( model, vel, model.mass_kg, scaled_speed, model.radius, non_id, -Inf)
 				end
 		
 				model.n_particles_old = model.n_particles
