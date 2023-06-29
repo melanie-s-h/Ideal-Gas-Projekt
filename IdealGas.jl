@@ -8,7 +8,6 @@ Author: Francisco Hella, Felix Rollbühler, Melanie *, Jan Wiechmann, 22/06/23
 """
 module IdealGas
 
-
 include("AgentTools.jl")
 include("TD_Physics.jl")
 using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools
@@ -93,7 +92,7 @@ function idealgas(;
 		:topBorder => topBorder,
 		:step => 0,
 		:cylinder_command => 0, 
-		:reduce_volume => 500,
+		:cylinder_pos => 500,
 		:reduce_volume_merker => 500,
 		:modes				=> modes,
 		:mode				=> mode,
@@ -174,29 +173,37 @@ function agent_step!(me::Particle, box::ABM)
 
 	check_particle_near_border!(me, box)  # Aufruf der neuen Funktion
 
+	# Zylinder Steuerug 
+
 	if box.cylinder_command == 1
 		button_reduce_volume!(me, box)
 		#println("zylinder fährt ein")
 	elseif box.cylinder_command == 0
-		println(box.reduce_volume_merker)	
-		box.reduce_volume_merker = box.reduce_volume
+		box.reduce_volume_merker = box.cylinder_pos
+	elseif box.cylinder_command == 2
+		button_increase_volume!(me,box)
+		box.reduce_volume_merker = box.space.extent[1] # solange Funtkion aktiv wird die Grenze bei check_particle_near_border aufgehoben 
 	end 
-
+	
+	#println("vor move agent: ")
+	#println(me.speed)
 	move_agent!(me, box, me.speed)
+	#println("nach move agent: ")
+	#println(me.speed)
 end
 #----------------------------------------------------------------------------------------
 
 function check_particle_near_border!(me, box)
     x, y = me.pos
 
-    if x < 1.8 && box.step - me.last_bounce > 3
+    if x < 1.8 + me.radius/2 && box.step - me.last_bounce > 3
         me.vel = (-me.vel[1], me.vel[2])
         me.last_bounce = box.step
     elseif x > box.reduce_volume_merker - 1.8 && box.step - me.last_bounce > 3
         me.vel = (-me.vel[1], me.vel[2])
         me.last_bounce = box.step
     end
-    if y < 1.8 && box.step - me.last_bounce > 3
+    if y < 1.8 + me.radius/2 && box.step - me.last_bounce > 3
         me.vel = (me.vel[1], -me.vel[2])
         me.last_bounce = box.step			
     elseif y > box.space.extent[2] - 1.8 && box.step - me.last_bounce > 3 
@@ -209,46 +216,54 @@ function button_reduce_volume!(me, box)
     x, y = me.pos
 
     # Überprüfen, ob y > 500 und falls ja, setzen Sie y auf 500 und invertieren Sie die y-Geschwindigkeit
-	if box.reduce_volume < 250 
-    	println("zylinder ist voll ausgefahren")
+	if box.cylinder_pos < 250 
+    	#println("zylinder ist voll ausgefahren")
+		box.reduce_volume_merker = box.cylinder_pos # neue Grenze
 	else
 		
-		println(box.reduce_volume)
+		#println(box.cylinder_position)
 
-     if x > box.reduce_volume 
+     if x > box.cylinder_pos
         if box.properties[:step] - me.last_bounce < 3 # wenn der letzte Treffer noch nicht lange her war 
             me.speed = me.speed +1
 			me.vel = (me.vel[1] - 0.5 , me.vel[2]) # x-Komponente wird durch Aufprall mit Wand verstärkt 
 			me.vel = me.vel ./ norm(me.vel) 
-            #println("neuer Treffer: ")
-			#print(box.properties[:step] - me.last_bounce)
-			#print(" my ID: ")
-			#println(me.id)
-			#print(" my Vel: ")
-			#print(me.vel)
+			println("nächste Erhöhung ")
+		 	println(me.speed)
+			println(me.id)
+
         end
         if box.properties[:step] - me.last_bounce > 3 # wenn der letzte Treffer schon länger her war 
-			#println("hello ")
-			#print(me.id)
-			#print(" my Vel: ")
-			#println(me.vel)
-		 me.vel = (-me.vel[1], me.vel[2])
-			#println("change direction ")
-			#print(me.vel)
-		 me.vel = (me.vel[1] - 0.5 , me.vel[2])
-			#println("x-änderung ")
-			#print(me.vel)
-		 me.vel = me.vel ./ norm(me.vel) 	
-			#println("normalised ")
-			#print(me.vel)
-        
+		 me.vel = (-me.vel[1], me.vel[2]) # change direction
+		 me.vel = (me.vel[1] - 0.5 , me.vel[2]) # x-richtung erhöhen 
+		 me.vel = me.vel ./ norm(me.vel) # Einheitsvektor erstellen 
          me.speed = me.speed + 1
+		 println("Erhöhung ")
+		 println(me.speed)
          me.last_bounce = box.properties[:step]
         end
      end
     end
 
 end
+
+#-----------------------------------------------------------------------------------------
+function button_increase_volume!(me, box)
+
+	x,y = me.pos
+
+	println(box.cylinder_pos)
+
+	if box.cylinder_pos > 499.5 
+    	println("zylinder ist in Ursprunngsposition")
+	
+	elseif x > box.cylinder_pos 
+			me.vel = (-me.vel[1], me.vel[2])	
+			me.speed = me.speed/2 # Anahme: die Hälfte der Energie wird abgegeben 
+	end 
+	
+end
+
 
 #-----------------------------------------------------------------------------------------
 """
@@ -286,9 +301,14 @@ function model_step!(model::ABM)
 	end
 
 	model.step += 1.0
-	if model.cylinder_command ==1 && model.reduce_volume > 250 
-		model.reduce_volume = model.reduce_volume - 0.3 
-	end 
+
+	if model.cylinder_command == 1 && model.cylinder_pos > 250 # Zylinder soll ausgefahren werden
+		model.cylinder_pos = model.cylinder_pos - 0.3
+		#println("volumen wird veringert")
+	elseif model.cylinder_command == 2 && model.cylinder_pos < 500 # Zylinder soll zurück gefahren werden
+		model.cylinder_pos = model.cylinder_pos + 0.3 
+		#println("volume wird erhöht")
+	end
 end
 
 #----------------------------------------------------------------------------------------
@@ -367,7 +387,7 @@ Run a simulation of the IdealGas model.
 		end 
 
 		on(decrease_vol_btn.clicks) do _
-			println("decrease_vol_btn")
+			box.cylinder_command = 2
 		end
 
 
