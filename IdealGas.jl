@@ -71,7 +71,7 @@ function idealgas(;
 	radius 					= 8.0,																# Radius of Particles in the model
 	e_internal 				= 3/2 * n_mol * 8.314 * temp,										# Internal energy of the gas
 	entropy_change 			= 0.0,																# Change in entropy of the gas
-	old_scaled_speed 		= 1.2,																# Scaled speed of the previous step
+	old_scaled_speed 		= 0.0,																# Scaled speed of the previous step
 	step 					= 0,																# Step counter
 	max_speed 				= 8000.0,  															# Maximum speed of the particles in m/s
 	extent 					= (500,500),														# Extent of Particles space
@@ -108,12 +108,12 @@ function idealgas(;
 
     model = ABM( Particle, space; properties, scheduler = Schedulers.Randomly())
 
-	scaled_speed = calc_and_scale_speed(box)
-	box.old_scaled_speed = scaled_speed
+	scaled_speed = calc_and_scale_speed(model)
+	model.old_scaled_speed = scaled_speed
 	for _ in 1:n_particles
 		vel = Tuple( 2rand(2).-1)
 		vel = vel ./ norm(vel)  # ALWAYS maintain normalised state of vel!
-        add_agent!( box, vel, mass_kg, scaled_speed, radius, non_id, -Inf)
+        add_agent!( model, vel, mass_kg, scaled_speed, radius, non_id, -Inf)
 	end
 
     return model
@@ -202,8 +202,6 @@ end
 """
 function model_step!(model::ABM)
 
-	# scale_agent_speed(model) # Scale speed to avoid excessive velocities
-
 	model.entropy_change = calc_entropy_change(model)
 	model.e_internal = calc_internal_energy(model)
 
@@ -238,13 +236,11 @@ Run a simulation of the IdealGas model.
 
 		function add_or_remove_agents!(model)
 			if model.n_particles_old < model.n_particles
-
+				scaled_speed = calc_and_scale_speed(model)
 				for _ in model.n_particles_old:model.n_particles
 					vel = Tuple( 2rand(2).-1)
 					vel = vel ./ norm(vel)  # ALWAYS maintain normalised state of vel!
-					speed = sqrt((3 * R * model.temp) / model.molar_mass / 1000)  # Initial speed based on temperature (molar_mass converted to kg/mol)
-					speed = scale_speed(speed, model.max_speed)  				# Scale speed to avoid excessive velocities
-					add_agent!( model, vel, model.mass_kg, speed, model.radius, non_id, -Inf)
+					add_agent!( model, vel, model.mass_kg, scaled_speed, model.radius, non_id, -Inf)
 				end
 		
 				model.n_particles_old = model.n_particles
