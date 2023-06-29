@@ -42,7 +42,7 @@ const R = 8.314 # Gaskonstante in J/(mol·K)
 Create and initialise the IdealGas model.
 """
 function idealgas(;
-	gases = Dict("Helium" => 4.0, "Hydrogen" => 1.0, "Oxygen" => 32.0),					# Gas types
+	gases = Dict("Helium" => 4.0, "Hydrogen" => 2.0, "Oxygen" => 32.0),					# Gas types
 	modes = Dict("Temperatur : Druck" => "temp-druck",									# Modes of operation
 				"Temperatur : Volumen" => "temp-vol",
 				"Druck : Temperatur" => "druck-temp",
