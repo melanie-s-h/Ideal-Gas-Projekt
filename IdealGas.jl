@@ -206,14 +206,19 @@ function model_step!(model::ABM)
 	model.e_internal = calc_internal_energy(model)
 
 	scaled_speed = calc_and_scale_speed(model)
-	for particle in allagents(model)
-		# If particles were slowed down/speed up by decreasing/increasing volume, keep the difference 
-		particle.speed = scaled_speed + (particle.speed - model.old_scaled_speed)
+	# Set speed of all particles the same when approaching absolute zero (Downwards from T=60 K)
+	if scaled_speed < 1
+		for particle in allagents(model)
+			particle.speed = scaled_speed
+		end
+	else # Else keep the difference in speed to the root mean square speed of the previous step (but scale it for visuals)
+		for particle in allagents(model)
+			particle.speed = scaled_speed + (particle.speed - model.old_scaled_speed) / (7/4)
+		end
 	end
 	model.old_scaled_speed = scaled_speed
 
 	model.step += 1.0
-
 
 end
 
