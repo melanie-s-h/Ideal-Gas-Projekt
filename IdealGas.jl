@@ -25,7 +25,7 @@ The populating agents in the IdealGas model.
 	speed::Float64					# Particle's speed
 	radius::Float64					# Particle's radius
 	prev_partner::Int				# Previous collision partner id
-	last_bounce::Float64			
+	last_bounce::Float64			# Counter for the last contact with border 
 end
 
 "Standard value that is definitely NOT a valid agent ID"
@@ -68,7 +68,7 @@ function idealgas(;
 	molar_mass 				= 4.0,																# Helium Gas mass in atomic mass units
 	mass_kg 				= molar_mass * 1.66053906660e-27,									# Convert atomic/molecular mass to kg
 	mass_gas 				= round(n_mol * molar_mass, digits=3),								# Mass of gas
-	radius 					= 8.0,																			# Radius of Particles in the model
+	radius 					= 6.0,																			# Radius of Particles in the model
 	e_internal = 3/2 * n_mol * 8.314 * temp,											# Inner energy of the gas
 	entropy_change = 0.0,
 	old_scaled_speed 		= 0.0,																# Scaled speed of the previous step
@@ -208,73 +208,91 @@ function agent_step!(me::Particle, model::ABM)
 		model.reduce_volume_merker = model.space.extent[1] 
 		# as long as the function is active, the limit at check_particle_near_border is removed
 	end 
+	
+
 	move_agent!(me, model, me.speed)
 end
 #----------------------------------------------------------------------------------------
+"""
+	check_particle_near_border!(me, model)
 
+Implementation of particle collisions with edge areas: 
+A specific region was defined where particles, due to their erratic motion, 
+change direction (reflect) at the edges. To avoid continuous direction changes
+of slow particles in this edge region, a counter last_bounce was introduced. 
+This allows a renewed change of direction only after three model steps.
+"""
 function check_particle_near_border!(me, model)
     x, y = me.pos
 
     if x < 1.8 + me.radius/2 && model.step - me.last_bounce > 3
         me.vel = (-me.vel[1], me.vel[2])
         me.last_bounce = model.step
-    elseif x > model.reduce_volume_merker - 1.8 && model.step - me.last_bounce > 3
+    elseif x > model.reduce_volume_merker - 1.8 - me.radius/2 && model.step - me.last_bounce > 3
         me.vel = (-me.vel[1], me.vel[2])
         me.last_bounce = model.step
     end
     if y < 1.8 + me.radius/2 && model.step - me.last_bounce > 3
         me.vel = (me.vel[1], -me.vel[2])
         me.last_bounce = model.step			
-    elseif y > model.space.extent[2] - 1.8 && model.step - me.last_bounce > 3 
+    elseif y > model.space.extent[2] - 1.8 - me.radius/2 && model.step - me.last_bounce > 3 
         me.vel = (me.vel[1], -me.vel[2])
         me.last_bounce = model.properties[:step]
     end
 end
 
 #-----------------------------------------------------------------------------------------
+"""
+	button_increase_volume!(me, model)
+
+Assumption: When the particles collide with the cylinder, 
+half of their velocity is transferred. Due to the pressure difference, 
+the compressed gas would accelerate the cylinder outward.
+
+"""
+
 function button_increase_volume!(me, model)
 
 	x,y = me.pos
 
-	println(model.cylinder_pos)
-
-	if model.cylinder_pos > 499.5 
+	if model.cylinder_pos > model.space.extent[1] - 0.5 
 		# do nothing
 	elseif x > model.cylinder_pos 
 			me.vel = (-me.vel[1], me.vel[2])	
-			me.speed = me.speed/2 # Anahme: die Hälfte der Energie wird abgegeben 
+			me.speed = me.speed/2 
 	end 
-	
 end
+
+"""
+	button_reduce_volume!(me, model)
+
+The x_component of the direction vector is increased on impact with the incoming cylinder.
+In addition, the velocity is also increased. The direction is only changed 
+when the particles move to the right. 
+"""
 
 function button_reduce_volume!(me, model)
     x, y = me.pos
+	x_direction, y_direction = me.vel
 
-	if model.cylinder_pos < 250 
+	if model.cylinder_pos < model.space.extent[1]/2
     	#println("zylinder ist voll ausgefahren")
 		model.reduce_volume_merker = model.cylinder_pos 
-		# the new limit is set 
+		# the new limit is set in the funktion check_particle_near_border
 	else
-		
-		#println(model.cylinder_position)
-
      if x > model.cylinder_pos
-        if model.properties[:step] - me.last_bounce < 3 # wenn der letzte Treffer noch nicht lange her war 
+        if x_direction <= 0 # when particle moves to the left 
             me.speed = me.speed +1
-			me.vel = (me.vel[1] - 0.5 , me.vel[2]) # x-Komponente wird durch Aufprall mit Wand verstärkt 
+			me.vel = (me.vel[1] - 0.5 , me.vel[2]) 
+			# x-component is reinforced by impact with wall 
 			me.vel = me.vel ./ norm(me.vel) 
-			println("nächste Erhöhung ")
-		 	println(me.speed)
-			println(me.id)
-
         end
-        if model.properties[:step] - me.last_bounce > 3 # wenn der letzte Treffer schon länger her war 
+
+        if x_direction > 0 # when perticle moves to the right
 		 me.vel = (-me.vel[1], me.vel[2]) # change direction
-		 me.vel = (me.vel[1] - 0.5 , me.vel[2]) # x-richtung erhöhen 
-		 me.vel = me.vel ./ norm(me.vel) # Einheitsvektor erstellen 
+		 me.vel = (me.vel[1] - 0.5 , me.vel[2])  
+		 me.vel = me.vel ./ norm(me.vel) # Create unit vector
          me.speed = me.speed + 1
-		 println("Erhöhung ")
-		 println(me.speed)
          me.last_bounce = model.properties[:step]
         end
      end
@@ -314,18 +332,17 @@ function model_step!(model::ABM)
 
 
 	if model.cylinder_command == 1 && model.cylinder_pos > 250 # Zylinder soll ausgefahren werden
-		model.cylinder_pos = model.cylinder_pos - 0.3
-		#println("volumen wird veringert")
+		model.cylinder_pos = model.cylinder_pos - 0.5
 		if  mod(model.step, 3) == 0
 			change_heatmap!(model)
 		end
 	elseif model.cylinder_command == 2 && model.cylinder_pos < 500 # Zylinder soll zurück gefahren werden
-		model.cylinder_pos = model.cylinder_pos + 0.3 
-		#println("volume wird erhöht")
+		model.cylinder_pos = model.cylinder_pos + 0.5 
 		if  mod(model.step, 3) == 0
 			change_heatmap!(model)
 		end
 	end 
+
 	model.total_volume = (model.cylinder_pos / model.width) * model.start_volume
 	model.pressure_pa = TD_Physics.calc_pressure(model)
 	model.pressure_bar = model.pressure_pa / 1e5
