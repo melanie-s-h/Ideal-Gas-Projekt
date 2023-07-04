@@ -284,7 +284,7 @@ function button_reduce_volume!(me, model)
 	else
      if x > model.cylinder_pos
         if x_direction <= 0 # when particle moves to the left 
-            me.speed = me.speed +1
+            me.speed = me.speed + 1
 			me.vel = (me.vel[1] - 0.5 , me.vel[2]) 
 			# x-component is reinforced by impact with wall 
 			me.vel = me.vel ./ norm(me.vel) 
@@ -294,12 +294,15 @@ function button_reduce_volume!(me, model)
 		 me.vel = (-me.vel[1], me.vel[2]) # change direction
 		 me.vel = (me.vel[1] - 0.5 , me.vel[2])  
 		 me.vel = me.vel ./ norm(me.vel) # Create unit vector
-         me.speed = me.speed + 1
+         me.speed = me.speed + 3
          me.last_bounce = model.properties[:step]
         end
      end
     end
-
+	if x > 400
+		println(me.speed)
+		println(me.id)
+	end 
 end
 
 
@@ -324,7 +327,7 @@ function model_step!(model::ABM)
 		end
 	else # Else keep the difference in speed to the root mean square speed of the previous step (but scale it for visuals)
 		for particle in allagents(model)
-			particle.speed = scaled_speed + (particle.speed - model.old_scaled_speed) / (7/4)
+			particle.speed = scaled_speed + (particle.speed - model.old_scaled_speed) / (11/10)
 		end
 	end
 	model.old_scaled_speed = scaled_speed
@@ -402,7 +405,7 @@ Run a simulation of the IdealGas model.
 		plotkwargs = (;
     		ac = :skyblue3,
     		scatterkwargs = (strokewidth = 1.0,),
-			as = 30.0,
+			as = 12.0,
 			add_colorbar = false,
 			colormap=:greys,
 			colorrange=(0, 1),
