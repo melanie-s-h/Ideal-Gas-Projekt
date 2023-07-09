@@ -9,8 +9,9 @@ Author: Francisco Hella, Felix Rollbühler, Melanie Heinrich, Jan Wichmann, 22/0
 module IdealGas
 
 include("AgentTools.jl")
-include("TD_Physics.jl")
-using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools, .TD_Physics
+include("PhysicalModel.jl")
+include("ViewModel.jl")
+using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, .AgentTools, .PhysicalModel
 
 #-----------------------------------------------------------------------------------------
 # Module types:
@@ -41,8 +42,7 @@ const R = 8.314 # Gaskonstante in J/(mol·K)
 Create and initialise the IdealGas model.
 """
 function idealgas(;
-	width = 500,
-	gases = Dict("Helium" => 4.0, "Hydrogen" => 1.0, "Oxygen" => 32.0),	# Gas types
+	gases = Dict("Helium" => 4.002602, "Hydrogen" => 2.01568, "Oxygen" => 31.998),	# Gas types
 	modes = Dict("Temperatur:Druck" => "temp-druck", 					# modes of calculations
 				#"Temperatur:Volumen" => "temp-vol",
 				 "Druck:Temperatur" => "druck-temp",
@@ -53,27 +53,30 @@ function idealgas(;
 				"Mol : Druck" => "mol-druck",
 				),				
 	mode = "temp-druck",
-	total_volume = 0.2,	
-	start_volume = copy(total_volume),									# Initial volume of the container
-	volume = calc_total_vol_dimension(total_volume),					# Dimension of the container
+	total_volume_m3 = 0.25,												# Total Volumen in m^3
+	total_volume_m3_old = 0.25,											# Total Volume in m^3 of the previous step
+	width = 500,														# Widht and height of the container in cm
+	start_volume = copy(total_volume_m3),								# Initial volume of the container
+	volume = calc_total_vol_dimension,									# Dimension of the container
 	temp = 293.15,														# Initial temperature of the gas in Kelvin
-	temp_old = 293.15,													# Temperature of the gas in Kelvin
+	temp_old = 293.15,													# Temperature of the gas in Kelvin of the previous step
 	pressure_bar = 1.0,													# Initial pressure of the gas in bar
 	pressure_pa =  100000,												# Initial pressure of the gas in Pascal
-	n_mol = pressure_pa * total_volume / (8.314*temp),					# Number of mol
+	pressure_pa_old = 100000,											# Pressure of the gas in Pascal of the previous step
+	n_mol = pressure_pa * total_volume_m3 / (8.314*temp),				# Number of mol
 	init_n_mol = copy(n_mol), 											# Initial number of mol
 	real_n_particles = n_mol * 6.022e23,								# Real number of Particles in model: Reduction for simplicity
     n_particles = round(real_n_particles/1e23, digits=0),				# Number of Particles in simulation model
 	n_particles_old 		= copy(n_particles), 						# Number of Particles in simulation model
-	molar_mass 				= 4.0,										# Helium Gas mass in atomic mass units
+	molar_mass 				= 4.002602,									# Helium Gas mass in atomic mass units
 	mass_kg 				= molar_mass * 1.66053906660e-27,			# Convert atomic/molecular mass to kg
 	mass_gas 				= round(n_mol * molar_mass, digits=3),		# Mass of gas
 	radius 					= 8.0,										# Radius of Particles in the model
 	e_internal = 3/2 * n_mol * 8.314 * temp,							# Inner energy of the gas
-	entropy_change = 0.0,												# Change in entropy of the gas
+	entropy_change = 0.0,												# Change in entropy of the gas,
+	f = 3,																# Degrees of freedom of the gas molecules,
 	old_scaled_speed 		= 0.0,										# Scaled speed of the previous step
 	step 					= 0,										# Step counter
-	max_speed 				= 8000.0,									# Change in entropy of the gas
 	extent = (width,width),												# Extent of Particles space
 )
     space = ContinuousSpace(extent; spacing = 2.5)
@@ -82,31 +85,32 @@ function idealgas(;
 		:n_particles		=> n_particles,
 		:temp				=> temp,
 		:temp_old			=> temp_old,
-		:total_volume		=> total_volume,
+		:total_volume_m3	=> total_volume_m3,
+		:total_volume_m3_old=> total_volume_m3_old,
 		:e_internal			=> e_internal,
-		:old_scaled_speed => old_scaled_speed,
+		:f					=> f,
+		:old_scaled_speed 	=> old_scaled_speed,
 		:entropy_change 	=> entropy_change,
 		:pressure_pa		=> pressure_pa,
+		:pressure_pa_old	=> pressure_pa_old,
 		:pressure_bar		=> pressure_bar,
 		:real_n_particles	=> real_n_particles,
-		:n_mol		=> n_mol,
+		:n_mol				=> n_mol,
 		:n_particles_old	=> n_particles_old,
-		:volume	=> volume,
-		#:temp_old	=> temp_old,
-		:init_n_mol	=> init_n_mol,
-		:gases		=> gases,
-		:molar_mass		=> molar_mass,
-		:mass_kg		=> mass_kg,
-		:mass_gas	=> mass_gas,
-		:step => 0,
-		:cylinder_command => 0, 
-		:cylinder_pos => 500,
-		:reduce_volume_merker => 500,
+		:volume				=> volume,
+		:init_n_mol			=> init_n_mol,
+		:gases				=> gases,
+		:molar_mass			=> molar_mass,
+		:mass_kg			=> mass_kg,
+		:mass_gas			=> mass_gas,
+		:step 				=> 0,
+		:cylinder_command 	=> 0, 
+		:cylinder_pos 		=> width,
+		:reduce_volume_merker => width,
 		:modes				=> modes,
 		:mode				=> mode,
 		:heatmap 			=> ones(width, width),
 		:radius				=> radius,
-		:max_speed			=> max_speed,
 		:width				=> width,
 		:start_volume		=> start_volume,
 	)
@@ -126,41 +130,42 @@ end
 """
 calc_total_vol_dimension( me, model)
 
-Calculates volume/dimension of a 3D-Space with [x, y=5, z=1], based on a given value of total volume.
+Calculates volume/dimension of a 3D-Space with [x, y = 500, z=1], based on a given value of total volume.
 """
-function calc_total_vol_dimension(volume, x_axis_vol=5.0)
-	y_axis_vol = volume/x_axis_vol #calculate y-axis
- 	return [y_axis_vol, x_axis_vol, 1.0] # return volume/dimension
+function calc_total_vol_dimension(volume_m3, y_axis=500.0)
+	x_axis = volume_m3/(y_axis/1000)
+	# println(x_axis)
+ 	return [x_axis, y_axis, 1.0] # return volume/dimension
 end
 
 #-----------------------------------------------------------------------------------------
 """
     change_heatmap!(model::ABM)
 
-		Changes the underlying heatmap as a representation of the chaning gas-tank.
+		Changes the underlying heatmap as a representation of the chanching gas-tank.
 """
 	function change_heatmap!(model::ABM)
-		for i in CartesianIndices(model.heatmap) # Iterate over all indices of the heatmap
-			if i[1] >= round(model.cylinder_pos) # If the index is in the cylinder
-				model.heatmap[i] = 0.0 # Set the value to 0
-			end
-			if i[1] <= round(model.cylinder_pos) # If the index is in the cylinder
-				model.heatmap[i] = 1.0 # Set the value to 0
+		line = fill(1.0, model.width)
+
+		for e in 1:model.width
+			e = round(e)
+			if e > model.cylinder_pos
+				line[e] = 0.0
 			end
 		end
+		for i in 1:model.width
+			model.heatmap[:,i] = line
+		end 
 
-	#	outer_rim = 1
-	#	heatarray = zeros(width, width)  # Initialize the heatarray with zeros
-	#
-	#	map((i) -> begin
-	#		x = i[1]
-	#		y = i[2]
-	#		if (x >= 1 && x <= outer_rim) || (y >= 1 && y <= outer_rim) || (x <= width && x >= width - outer_rim) || (y <= width && y >= width - outer_rim)
-	#			heatarray[x, y] = 1.0
-	#		end
-	#	end, CartesianIndices(heatarray))
-	#
-	#	return heatarray
+
+		#for i in CartesianIndices(model.heatmap) # Iterate over all indices of the heatmap
+		#	if i[1] >= round(model.cylinder_pos) # If the index is in the cylinder
+		#		model.heatmap[i] = 0.0 			 # Set the value to 0
+		#	end
+		#	if i[1] <= round(model.cylinder_pos) # If the index is in the cylinder
+		#		model.heatmap[i] = 1.0 			 # Set the value to 0
+		#	end
+		#end
 	end
 #-----------------------------------------------------------------------------------------
 """
@@ -196,78 +201,109 @@ function agent_step!(me::Particle, model::ABM)
 
 	check_particle_near_border!(me, model)
 
-	# Zylinder control 
+	# cylinder control 
 	if model.cylinder_command == 1
 		button_reduce_volume!(me, model)
 	elseif model.cylinder_command == 0
 		model.reduce_volume_merker = model.cylinder_pos
+		# the new limit is set in the function check_particle_near_border
 	elseif model.cylinder_command == 2
 		button_increase_volume!(me,model)
-		model.reduce_volume_merker = model.space.extent[1] # as long as the function is active, the border of check_particle_near_border! is deacrivated
+		model.reduce_volume_merker = model.space.extent[1] 
+		# as long as the function is active, the limit at check_particle_near_border is removed
 	end 
 	move_agent!(me, model, me.speed)
 end
 #----------------------------------------------------------------------------------------
 
-function check_particle_near_border!(me, model)
-    x, y = me.pos # Get current position
+"""
+	check_particle_near_border!(me, model)
 
-    if x < 1.8 + me.radius/2 && model.step - me.last_bounce > 3 # Check if near left border
-        me.vel = (-me.vel[1], me.vel[2]) # Reflect x-velocity
-        me.last_bounce = model.step # Update last bounce
-    elseif x > model.reduce_volume_merker - 1.8 && model.step - me.last_bounce > 3 # Check if near right border
-        me.vel = (-me.vel[1], me.vel[2]) # Reflect x-velocity
-        me.last_bounce = model.step # Update last bounce
+Implementation of particle collisions with edge areas: 
+A specific region was defined where particles, due to their erratic motion, 
+change direction (reflect) at the edges. To avoid continuous direction changes
+of slow particles in this edge region, a counter last_bounce was introduced. 
+This allows a renewed change of direction only after tree model steps.
+
+Update: The direction is now queried before the change of direction.
+"""
+function check_particle_near_border!(me, model)
+    x, y = me.pos
+	x_direction, y_direction = me.vel
+
+    if x < 2 + me.radius/2 && x_direction < 0 # the "2" represents the limit range in which the particles are repelled 
+        me.vel = (-me.vel[1], me.vel[2])
+        #me.last_bounce = model.step 
+    elseif x > model.reduce_volume_merker - 2 - me.radius/2 && x_direction > 0
+        me.vel = (-me.vel[1], me.vel[2])
+        #me.last_bounce = model.step
     end
-    if y < 1.8 + me.radius/2 && model.step - me.last_bounce > 3 # Check if near bottom border
-        me.vel = (me.vel[1], -me.vel[2]) # Reflect y-velocity
-        me.last_bounce = model.step # Update last bounce
-    elseif y > model.space.extent[2] - 1.8 && model.step - me.last_bounce > 3 # Check if near top border 
-        me.vel = (me.vel[1], -me.vel[2]) # Reflect y-velocity
-        me.last_bounce = model.properties[:step] # Update last bounce
+    if y < 2 + me.radius/2 && y_direction < 0
+        me.vel = (me.vel[1], -me.vel[2])
+        #me.last_bounce = model.step			
+    elseif y > model.space.extent[2] - 2 - me.radius/2 && y_direction > 0
+		me.vel = (me.vel[1], -me.vel[2])
+        #me.last_bounce = model.properties[:step]
     end
 end
 
 #-----------------------------------------------------------------------------------------
+"""
+	button_increase_volume!(me, model)
+
+Assumption: When the particles collide with the cylinder, 
+half of their velocity is transferred. Due to the pressure difference, 
+the compressed gas would accelerate the cylinder outward.
+
+"""
+
 function button_increase_volume!(me, model)
 
 	x,y = me.pos
 
-
-	if model.cylinder_pos > 499.5 
-	
+	if model.cylinder_pos > model.space.extent[1] - 0.5 
+		# do nothing
 	elseif x > model.cylinder_pos 
 			me.vel = (-me.vel[1], me.vel[2])	
-			me.speed = me.speed/2 # Assumption: the particle loses half of its speed when hitting the piston
+			me.speed = me.speed/2 
 	end 
-	
 end
+
+#----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+"""
+	button_reduce_volume!(me, model)
+
+The x_component of the direction vector is increased on impact with the incoming cylinder.
+In addition, the velocity is also increased. The direction is only changed 
+when the particles move to the right. 
+"""
 
 function button_reduce_volume!(me, model)
     x, y = me.pos
+	x_direction, y_direction = me.vel
 
-    #  Check if y > 500 and if so set y to 500 and invert the y velocity
-	if model.cylinder_pos < 250 
-		model.reduce_volume_merker = model.cylinder_pos # new border
+	if model.cylinder_pos <= model.space.extent[1]/2
+		model.reduce_volume_merker = model.cylinder_pos 
+		# the new limit is set in the funktion check_particle_near_border
 	else
-		
-     if x > model.cylinder_pos
-        if model.properties[:step] - me.last_bounce < 3 # if the last bounce was recent
-            me.speed = me.speed +1
-			me.vel = (me.vel[1] - 0.5 , me.vel[2]) # x-component is increased when hitting the piston
+     if x > model.cylinder_pos - 2
+        if x_direction <= 0 # when particle moves to the left and hit the cylinder 
+            me.speed = me.speed + 1
+			me.vel = (me.vel[1] - 0.5 , me.vel[2]) 
+			# x-component is reinforced by impact with wall 
 			me.vel = me.vel ./ norm(me.vel) 
-
         end
-        if model.properties[:step] - me.last_bounce > 3 # if the last bounce was a while ago
+
+        if x_direction > 0 # when perticle moves to the right and hit the cylinder 
 		 me.vel = (-me.vel[1], me.vel[2]) # change direction
-		 me.vel = (me.vel[1] - 0.5 , me.vel[2]) # increase x-component
-		 me.vel = me.vel ./ norm(me.vel) # create unit vector
-         me.speed = me.speed + 1
+		 me.vel = (me.vel[1] - 0.5 , me.vel[2])  
+		 me.vel = me.vel ./ norm(me.vel) # Create unit vector
+         me.speed = me.speed + 3
          me.last_bounce = model.properties[:step]
         end
      end
     end
-
 end
 
 
@@ -281,8 +317,8 @@ function model_step!(model::ABM)
 
 	"""
 	
-	model.entropy_change = calc_entropy_change(model) # calculate the entropy change
 	model.e_internal = calc_internal_energy(model) # calculate the internal energy
+	model.entropy_change = calc_entropy_change(model) # calculate the entropy change
 
 	scaled_speed = calc_and_scale_speed(model) # calculate the root mean square speed and scale it for visuals
 
@@ -293,34 +329,34 @@ function model_step!(model::ABM)
 		end
 	else # Else keep the difference in speed to the root mean square speed of the previous step (but scale it for visuals)
 		for particle in allagents(model) # for all particles in the model
-			particle.speed = scaled_speed + (particle.speed - model.old_scaled_speed) / (7/4) # set the speed to the scaled value
+			particle.speed = scaled_speed + (particle.speed - model.old_scaled_speed) / (11/10) # set the speed to the scaled value
 		end
 	end
 	model.old_scaled_speed = scaled_speed # set the old scaled speed to the current scaled speed
 
-	model.step += 1.0
+	model.step += 1.0 # currently not used 
 
-
-
-	if model.cylinder_command == 1 && model.cylinder_pos > 250 # expand cylinder
-		model.cylinder_pos = model.cylinder_pos - 0.3 # Change cylinder position
+	if model.cylinder_command == 1 && model.cylinder_pos > model.space.extent[1]/2 # expand cylinder
+		model.cylinder_pos = model.cylinder_pos - 0.5 # Change cylinder position
 		if  mod(model.step, 3) == 0 # update heatmap every 3 steps
 			change_heatmap!(model) # update heatmap
 		end
-	elseif model.cylinder_command == 2 && model.cylinder_pos < 500 # compress cylinder
-		model.cylinder_pos = model.cylinder_pos + 0.3 # Change cylinder position
+	elseif model.cylinder_command == 2 && model.cylinder_pos < model.space.extent[1] # compress cylinder
+		model.cylinder_pos = model.cylinder_pos + 0.5 # Change cylinder position
 		if  mod(model.step, 3) == 0 # update heatmap every 3 steps
 			change_heatmap!(model) # update heatmap
 		end
-	end 
-	model.total_volume = (model.cylinder_pos / model.width) * model.start_volume # Volumen wird berechnet
+	end
+
+	model.total_volume_m3 = (model.cylinder_pos / model.width) * model.start_volume # Volumen wird berechnet
 
 	if model.mode == "vol-temp" # If the mode is volume-temperature
-		model.temp = TD_Physics.calc_temperature(model) # Calculate the temperature
+		model.temp = PhysicalModel.calc_temperature(model) # Calculate the temperature
 	else
-		model.pressure_pa = TD_Physics.calc_pressure(model) # Calculate the pressure
+		model.pressure_pa = PhysicalModel.calc_pressure(model) # Calculate the pressure
 		model.pressure_bar = model.pressure_pa / 1e5 # Calculate the pressure in bar
 	end
+	model.pressure_pa_old = model.pressure_pa	# Set old system variable for next step entropy calculation
 end
 
 #----------------------------------------------------------------------------------------
@@ -328,81 +364,31 @@ end
 """
 	demo()
 
-Run a simulation of the IdealGas model.
+Run a simulation of the IdealGas model and init the UI.
 """
 	function demo()
-
-		function set_slider(value, slider, slider_value, unit)
-			"""
-
-			Function to set the value of a slider and its corresponding text.
-
-			"""
-			slider_value.text[] = string(round(value, digits=2), " ", unit) # set text
-			set_close_to!(slider, round(value, digits=2)) # set slider
-		end
-
-		function add_or_remove_agents!(model)
-			"""
-
-			Function to handle the number of particles in the simulation based on n_particles.
-
-			"""
-			if model.n_particles > model.n_particles_old # if n_particles is increased
-				scaled_speed = calc_and_scale_speed(model)
-				for _ in 1:(model.n_particles - model.n_particles_old) # add the difference
-					vel = Tuple( 2rand(2).-1) # random velocity vector
-					vel = vel ./ norm(vel) # normalize velocity vector
-					add_agent!( model, vel, model.mass_kg, scaled_speed, model.radius, non_id, -Inf)
-				end
-		
-				model.n_particles_old = model.n_particles
-		
-			elseif model.n_particles < model.n_particles_old # if n_particles is decreased
-
-					for _ in 1:(model.n_particles_old - model.n_particles) # remove the difference
-						if nagents(model) > 0
-							agent = random_agent(model) # get a random agent
-							kill_agent!(agent, model) # kill it
-						end
-					end
-				model.n_particles_old = model.n_particles
-			end
-		end
-
-		function create_custom_slider(gl_sliders, row_num, labeltext, fontsize, range, unit, startvalue)
-			"""
-
-			Function to create a custom slider with a label and a value label.
-
-			"""
-
-			label = Label(gl_sliders[row_num, 0], labeltext, fontsize=fontsize) # create label
-			slider = Slider(gl_sliders[row_num, 1], range=range, startvalue=startvalue) # create slider
-			slider_value = Label(gl_sliders[row_num, 2], string(round(slider.value[], digits=2)) * " " * unit) # create value label
-			return label, slider, slider_value
-		end
 
 		model = idealgas()
 		
 		monitor = GLMakie.GLFW.GetPrimaryMonitor() # get primary monitor
 		width = GLMakie.MonitorProperties(monitor).videomode.width # get width of monitor
 		height = GLMakie.MonitorProperties(monitor).videomode.height # get height of monitor
+
+		heatkwargs = (colorrange = (0,1), colormap =:greys,)
 		
 		plotkwargs = (; # kwargs for the plot
     		ac = :skyblue3, # color of the particles
     		scatterkwargs = (strokewidth = 1.0,), # kwargs for the scatterplot
-			as = 25.0, # size of the particles
+			as = 12.0, # size of the particles
 			add_colorbar = false,
-			colormap=:greys, # colorscheme of the heatmap
-			colorrange=(0, 1), # range of the heatmap
 			heatarray=:heatmap, # type of heatmap
 			framerate = 60, # Refreshrate of the simulation
+			heatkwargs
 		)
 	
 		entropy(model) = model.entropy_change # Entropieänderung als Funktion für die Visualisierung
 		mdata = [entropy]
-		mlabels = ["ΔS in [J/K] (Entropieänderung)"]
+		mlabels = ["Δs in [J/kgK] (Entropieänderung)"]
 	
 		playground,abmobs = abmplayground( model, idealgas; # create playground
 			agent_step!,
@@ -410,12 +396,14 @@ Run a simulation of the IdealGas model.
 			mdata,
 			mlabels,
 			figure = (; resolution = (width*0.75, height*0.75)), # set resolution of the figure
-
 			plotkwargs...
 		)
 
 		# Playground
 		model_plot = playground.content[1] # plot for the visualization of the model
+		model_plot.title = "Gasbehälter\n(500x500x1)"
+		model_plot.xlabel = "in cm"
+		model_plot.ylabel = "in cm"
 		playground[0:2,0] = model_plot 
 		entropy_plot = playground.content[7] # plot for the graph of the entropy
 		playground[0:1,1:2] = entropy_plot
@@ -436,9 +424,9 @@ Run a simulation of the IdealGas model.
 		gl_buttons[0,6:7] = playground.content[6] # clear data button
 
 		# creation of the buttons
-		increase_vol_btn = Button(vol_change_btns[0,3:4], label = "Volumen erhöhen", fontsize = 22) # button to increase the volume
-		pause_vol_btn = Button(vol_change_btns[0,2], label = "Pause", fontsize = 22) # button to pause the volume change
-		decrease_vol_btn = Button(vol_change_btns[0,0:1], label = "Volumen verringern", fontsize = 22) # button to decrease the volume
+		increase_vol_btn = Button(vol_change_btns[0,3:4], label = "Volumen\nerhöhen", fontsize = 18, padding = (8, 8, 8, 8)) # button to increase the volume
+		pause_vol_btn = Button(vol_change_btns[0,2], label = "Zylinder\nstoppen", fontsize = 18, padding = (8, 8, 8, 8)) # button to pause the volume change
+		decrease_vol_btn = Button(vol_change_btns[0,0:1], label = "Volumen\nverringern", fontsize = 18, padding = (8, 8, 8, 8)) # button to decrease the volume
 
 		# creation of the sliders
 		gas_dropdown = Menu(gl_dropdowns[0,1], options = keys(model.gases), default = "Helium", fontsize=22) # dropdown for the selection of the gas
@@ -448,48 +436,52 @@ Run a simulation of the IdealGas model.
 		gas_label = Label(gl_dropdowns[0,0], "Gas: ", fontsize=22)# label for the gas
 		mode_label = Label(gl_dropdowns[1,0], "Modus: ", fontsize=22) # label for the mode
 		mass_label = Label(gl_labels[0,0:2], "Masse: " * string(model.mass_gas)* " g", fontsize=22) # label for the mass of the gas
-		volume_label = Label(gl_labels[1,0:2], "Volumen: " * string(round(model.total_volume, digits=4))* " m³ ; " * string(round(model.total_volume * 1000, digits=4)) * " L", fontsize=22) # label for the volume of the box
+		volume_label = Label(gl_labels[1,0:2], "Volumen: " * string(round(model.total_volume_m3, digits=4))* " m³ ; " * string(round(model.total_volume_m3 * 1000, digits=4)) * " L", fontsize=22) # label for the volume of the box
 		e_internal_label = Label(gl_labels[2,0:2], "Eᵢ: " * string(round(model.e_internal, digits=2)) * " J", fontsize=22) # label for the internal energy of the gas
-		warning_label = Label(gl_buttons[1,0:7], "'Reset-Button' nicht benutzen !!!", fontsize=22) # label for the warning of the reset button, because it is not working properly
+		warning_label = Label(gl_buttons[1,0:7], "'Reset-Button' nicht benutzen !", fontsize=14) # label for the warning of the reset button, because it is not working properly
 		
 
 		# Sliders
 		gl_abm_sliders[0,0:2] = playground.content[2]# Build-in Slider von abmexploration
 
-		temp_slider_label, temp_slider, temp_slider_value = create_custom_slider(gl_sliders, 0, "Temperatur: ", 22, 0.0:0.01:1000.0, "K", model.temp) # slider for the temperature
-		pressure_slider_bar_label, pressure_slider_bar, pressure_slider_bar_value = create_custom_slider(gl_sliders, 1, "Druck[Bar]: ", 22, 0.0:0.01:5.0, "Bar", model.pressure_bar) # slider for the pressure in bar
-		pressure_slider_pa_label, pressure_slider_pa, pressure_slider_pa_value = create_custom_slider(gl_sliders, 2, "Druck[Pa]: ", 22, 0:1:500000, "Pa", model.pressure_pa) # slider for the pressure in Pa
-		n_mol_slider_label, n_mol_slider, n_mol_slider_value = create_custom_slider(gl_sliders, 3, "Stoffmenge: ", 22, 0.0:0.01:20, "mol", model.n_mol) # slider for the amount of substance
+		temp_slider_label, temp_slider, temp_slider_value = ViewModel.create_custom_slider(gl_sliders, 0, "Temperatur: ", 22, 0.0:0.01:1000.0, "K", model.temp) # slider for the temperature
+		pressure_slider_bar_label, pressure_slider_bar, pressure_slider_bar_value = ViewModel.create_custom_slider(gl_sliders, 1, "Druck[Bar]: ", 22, 0.0:0.01:5.0, "Bar", model.pressure_bar) # slider for the pressure in bar
+		pressure_slider_pa_label, pressure_slider_pa, pressure_slider_pa_value = ViewModel.create_custom_slider(gl_sliders, 2, "Druck[Pa]: ", 22, 0:1:500000, "Pa", model.pressure_pa) # slider for the pressure in Pa
+		n_mol_slider_label, n_mol_slider, n_mol_slider_value = ViewModel.create_custom_slider(gl_sliders, 3, "Stoffmenge: ", 22, 0.0:0.01:20, "mol", model.n_mol) # slider for the amount of substance
 
 		is_updating = false # variable to check if the model is updating
 
 		on(abmobs.model) do _ # if the model is updated
-			e_internal_label.text[] = string("Eᵢ: ", string(round(model.e_internal)), " J") # set the label for the internal energy of the gas
+			e_internal_label.text[] = string("Eᵢ: ", string(round(model.e_internal, digits=2)), " J") # set the label for the internal energy of the gas
 			if model.mass_gas > 999.9 # if the mass of the gas is greater than 999.9
 				mass_label.text[] = string("Masse: ", string(round(model.mass_gas/1000, digits=3), " kg")) # set the label for the mass of the gas in kg
 			else
 				mass_label.text[] = string("Masse: ", string(model.mass_gas), " g") # set the label for the mass of the gas in g
 			end
-			volume_label.text[] = string("Volumen: " * string(round(model.total_volume, digits=4))* " m³ ; " * string(round(model.total_volume * 1000, digits=4)) * " L") # set the label for the volume of the box
+			volume_label.text[] = string("Volumen: " * string(round(model.total_volume_m3, digits=4))* " m³ ; " * string(round(model.total_volume_m3 * 1000, digits=4)) * " L") # set the label for the volume of the box
 
-			set_slider(model.n_mol, n_mol_slider, n_mol_slider_value, "mol") # set the slider for the amount of substance
-			set_slider(model.temp, temp_slider, temp_slider_value, "K") # set the slider for the temperature
-			set_slider(model.pressure_pa, pressure_slider_pa, pressure_slider_pa_value, "Pa") # set the slider for the pressure in Pa
-			set_slider(model.pressure_bar, pressure_slider_bar, pressure_slider_bar_value, "Bar") # set the slider for the pressure in bar
-
-
-
+			ViewModel.set_slider(model.n_mol, n_mol_slider, n_mol_slider_value, "mol") # set the slider for the amount of substance
+			ViewModel.set_slider(model.temp, temp_slider, temp_slider_value, "K") # set the slider for the temperature
+			ViewModel.set_slider(model.pressure_pa, pressure_slider_pa, pressure_slider_pa_value, "Pa") # set the slider for the pressure in Pa
+			ViewModel.set_slider(model.pressure_bar, pressure_slider_bar, pressure_slider_bar_value, "Bar") # set the slider for the pressure in bar
 		end
 
 		on(gas_dropdown.selection) do selected_gas # if the gas changes
 			model.molar_mass = model.gases[selected_gas] # set the molar mass of the gas
 			model.mass_kg = model.molar_mass * 1.66054e-27 # set the mass in kg of one molecule of the gas
 			model.mass_gas = round(model.n_mol * model.molar_mass, digits=3) # set the mass of the gas
-			
+			# Set the degrees of freedom of the gas molecules depending on the selected gas
+			if selected_gas == "Helium"
+				model.f = 3				# Monoatomic gas
+			else
+				model.f = 5 			# Diatomic gas (Hydrogen or Oxygen)
+			end
 		end
 
 		on(mode_dropdown.selection) do selected_mode # if the mode changes
 			model.mode = model.modes[selected_mode] # set the mode
+			# Stop the volume change on mode change to prevent polytropic processes
+			model.cylinder_command = 0
 		end
 		
 		on(temp_slider.value) do temp # if the value of the temperature slider changes
@@ -499,17 +491,17 @@ Run a simulation of the IdealGas model.
 			end
 			
 			if model.mode == "temp-druck" # if the mode is "temp-druck"
-				model.pressure_pa = TD_Physics.calc_pressure(model) # calculate the pressure in Pa
+				model.pressure_pa = PhysicalModel.calc_pressure(model) # calculate the pressure in Pa
 				model.pressure_bar = model.pressure_pa / 1e5 # calculate the pressure in Bar
 			end
 
 			"""
 			elseif model.mode == "temp-vol"
-				model.total_volume = calc_volume(model)
-				model.volume = calc_total_vol_dimension(model.total_volume)
+				model.total_volume_m3 = calc_volume(model)
+				model.volume = calc_total_vol_dimension(model.total_volume_m3)
 
 				# set the range of the sliders
-				#volume_slider.range = model.total_volume * slider_multiplier_min:model.total_volume/slider_step_quotient:model.total_volume * slider_multiplier_max
+				#volume_slider.range = model.total_volume_m3 * slider_multiplier_min:model.total_volume_m3/slider_step_quotient:model.total_volume_m3 * slider_multiplier_max
 			end
 			"""
 		end
@@ -525,12 +517,11 @@ Run a simulation of the IdealGas model.
 				pressure_slider_bar_value.text[] = string(round(model.pressure_bar, digits=2)) * " Bar" # set the label of the slider
 				
 				if model.mode == "druck-vol" # if the mode is "druck-vol"
-					model.total_volume = calc_volume(model) # calculate the total volume
-					model.volume = calc_total_vol_dimension(model.total_volume) # calculate the volume dimension
+					model.total_volume_m3 = PhysicalModel.calc_volume(model) # calculate the total volume
+					model.volume = calc_total_vol_dimension(model.total_volume_m3) # calculate the volume dimension
 
 				elseif model.mode == "druck-temp" # If the mode is "druck-temp"
-					model.temp = calc_temperature(model) # Calculate the temperature
-
+					model.temp = PhysicalModel.calc_temperature(model) # Calculate the temperature
 				end
 			end
 			is_updating = false
@@ -547,11 +538,11 @@ Run a simulation of the IdealGas model.
 				pressure_slider_pa_value.text[] = string(round(model.pressure_pa, digits=2)) * " Pa" # set the label of the slider
 
 				if model.mode == "druck-vol" # if the mode is "druck-vol"
-					model.total_volume = calc_volume(model) # calculate the volume
-					model.volume = calc_total_vol_dimension(model.total_volume) # calculate the dimension of the volume
+					model.total_volume_m3 = PhysicalModel.calc_volume(model) # calculate the volume
+					model.volume = calc_total_vol_dimension(model.total_volume_m3) # calculate the dimension of the volume
 
 				elseif model.mode == "druck-temp" # if the mode is "druck-temp"
-					model.temp = calc_temperature(model) # calculate the temperature
+					model.temp = PhysicalModel.calc_temperature(model) # calculate the temperature
 
 				end
 			end
@@ -561,16 +552,17 @@ Run a simulation of the IdealGas model.
 		on(n_mol_slider.value) do n_mol # if the slider for the number of moles changes
 			if model.mode == "mol-temp" || model.mode == "mol-druck" # if the mode is "mol-temp" or "mol-druck"
 				model.n_mol = n_mol[] # set the number of moles
+				model.mass_gas = round(model.n_mol * model.molar_mass, digits=3) # set the mass of the gas
 				n_mol_slider_value.text[] = string(round(n_mol[], digits=2)) * " mol" # set the label of the slider
 				model.real_n_particles = round(model.n_mol * 6.022e23, digits=0) # calculate the real number of particles
 				model.n_particles = round(model.real_n_particles / 1e23, digits=0) # scale the number of particles to a reasonable/displayable number
-				add_or_remove_agents!(model) # add or remove agents to match the scaled number of particles
+				ViewModel.add_or_remove_agents!(model) # add or remove agents to match the scaled number of particles
 
 				if model.mode == "mol-temp" # if the mode is "mol-temp"
-					model.temp = TD_Physics.calc_temperature(model) # calculate
+					model.temp = PhysicalModel.calc_temperature(model) # calculate
 
 				elseif model.mode == "mol-druck" # if the mode is "mol-druck"
-					model.pressure_pa = TD_Physics.calc_pressure(model) # calculate the pressure
+					model.pressure_pa = PhysicalModel.calc_pressure(model) # calculate the pressure
 					model.pressure_bar = model.pressure_pa / 1e5 # calculate the pressure in bar
 
 				end
@@ -578,7 +570,12 @@ Run a simulation of the IdealGas model.
 		end
 
 		on(increase_vol_btn.clicks) do _ # if the button to increase the volume is clicked
-			model.cylinder_command = 2 # setze den Befehl zum Erhöhen des Volumens
+			# Only allow to change volume if in the correct mode
+			if model.mode == "vol-druck" || model.mode == "vol-temp"
+				model.cylinder_command = 2 # setze den Befehl zum Erhöhen des Volumens
+			else
+				model.cylinder_command = 0
+			end
 		end  
 
 		on(pause_vol_btn.clicks) do _ # if the button to pause the volume is clicked
@@ -586,7 +583,11 @@ Run a simulation of the IdealGas model.
 		end 
 
 		on(decrease_vol_btn.clicks) do _ # if the button to decrease the volume is clicked
-			model.cylinder_command = 1 # set the command to decrease the volume
+			if model.mode == "vol-druck" || model.mode == "vol-temp"
+				model.cylinder_command = 1 # set the command to decrease the volume
+			else
+				model.cylinder_command = 0
+			end
 		end
 
 		playground # draw the playground
