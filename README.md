@@ -4,7 +4,7 @@ This simulation will provide first-year engineering undergraduates with  hands-o
 
 Starten des Programms:
 1. installieren von Julia
-2. installieren der nötigen Packages ()
+2. installieren der nötigen Packages
     1. Julia Konsole öffnen
     2. using Pkg
     3. Pkg.add("Paketname@vX.Y.Z")
