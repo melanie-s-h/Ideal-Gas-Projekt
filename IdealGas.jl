@@ -379,7 +379,7 @@ Run a simulation of the IdealGas model and init the UI.
 		plotkwargs = (; # kwargs for the plot
     		ac = :skyblue3, # color of the particles
     		scatterkwargs = (strokewidth = 1.0,), # kwargs for the scatterplot
-			as = 12.0, # size of the particles
+			as = 25.0, # size of the particles
 			add_colorbar = false,
 			heatarray=:heatmap, # type of heatmap
 			framerate = 60, # Refreshrate of the simulation

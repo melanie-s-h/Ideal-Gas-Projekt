@@ -10,7 +10,7 @@ Author: Francisco Hella, Felix Rollbühler, Melanie *, Jan Wiechmann, 20/06/23
 module PhysicalModel
 
 include("AgentTools.jl")
-using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, GeometryBasics, Observables
+using Agents, LinearAlgebra, GLMakie, InteractiveDynamics, Observables
 
 export calc_temperature, calc_pressure, calc_n_mol, calc_real_n_particles, momentum, kinetic_energy, scale_speed, calc_and_scale_speed, calc_total_vol_dimension, calc_entropy_change, calc_internal_energy, calc_volume
 
