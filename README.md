@@ -12,7 +12,6 @@ Starten des Programms:
         - LinearAlgebra
         - GLMakie v0.8.5
         - InteractiveDynamics v0.22.1
-        - GeometryBasics v0.4.7
         - Observables v0.5.4
 3. Mit dem "cd()" command zu dem Verzeichnis navigieren, indem "IdealGas.jl" enthalten ist
 4. include("IdealGas.jl")
