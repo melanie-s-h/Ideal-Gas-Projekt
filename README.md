@@ -6,7 +6,14 @@
 <hr>
 <br>
 
-![]("C:\Users\Melanie\Videos\github_julia_ideal_gas.mp4")
+
+https://github.com/melanie-s-h/Ideal-Gas-Projekt/assets/134691659/b1b79bc2-4213-47bf-8091-8b954f52ccb2
+
+*The Application was build in collaboration with three other students, the parts implemented by me are as follows:*
+<br>
+* **Root-mean-square speed:** Calculated the root mean squared speed of the particles based on temperature of the gas and scaled the result to match the visual demonstration.
+    * *uᵣₘₛ = sqrt(3*R*T / M)* 
+
 
 <br>
 <hr>
