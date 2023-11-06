@@ -16,15 +16,15 @@ https://github.com/melanie-s-h/Ideal-Gas-Projekt/assets/134691659/b1b79bc2-4213-
       * R: Gas Constant
       * T: Temperature
       * M: Molar mass of gas
-<br>
+      * 
 * **Speed Redistribution:** Redistributing the speed each step of the simulation of each particle to match the visual representation of the calculated root-mean-square speed.
-<br>
+
 * **Internal Energy:** Calculating the internal energy of the ideal gas based on the temperature each steap of the model based on the changed parameters.
    * *Eᵢ = f * 1/2 * n * R * T*
       * Eᵢ: Internal Energy
       * f: Degrees of Freedom (of the Particles)
       * n: Mol of gas
-<br>
+        
 * **Change of entropy:** Calculating the specific heat capacity and the change in entropy depending on the thermodynamic process happening at the moment. Displaying the entropy change in the simulation GUI in a diagram.
    * For isochoric process or |isochoric & isothermal|-process
         * *Specific heat capacity cₚ = (f+2) * R/2 * n / m*
