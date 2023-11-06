@@ -16,7 +16,6 @@ https://github.com/melanie-s-h/Ideal-Gas-Projekt/assets/134691659/b1b79bc2-4213-
       * R: Gas Constant
       * T: Temperature
       * M: Molar mass of gas
-      * 
 * **Speed Redistribution:** Redistributing the speed each step of the simulation of each particle to match the visual representation of the calculated root-mean-square speed.
 
 * **Internal Energy:** Calculating the internal energy of the ideal gas based on the temperature each steap of the model based on the changed parameters.
@@ -33,7 +32,6 @@ https://github.com/melanie-s-h/Ideal-Gas-Projekt/assets/134691659/b1b79bc2-4213-
    * For isobaric process or isothermal process
         * *Specific heat capacity cᵥ = f * R/2 * n / m*
         * *Change in entropy Δs = cᵥ · ln(T₂/T₁) + Rᵢ · ln(V₂/V₁)*
-<br>
 * Rework of the graphical user interface and the plotting kwargs.
 * Fitting the size of the simulation-UI dynamically to the display size of the end user.
 * Prevention of polytropic thermodynamic processes by halting the volume change in non-volume relevant modes.
@@ -43,20 +41,20 @@ https://github.com/melanie-s-h/Ideal-Gas-Projekt/assets/134691659/b1b79bc2-4213-
 <hr>
 <br>
 
-<sub><sup>
-**Running the Application:** *(Instructions in German)* <br>
-Starten des Programms:<br>
-* Installieren von Julia
-* Installieren der nötigen Packages
-    * Julia Konsole öffnen
-    * Using Pkg
-    * Pkg.add("Paketname@vX.Y.Z")
-        * Agents v5.14.0
-        * LinearAlgebra
-        * GLMakie v0.8.5
-        * InteractiveDynamics v0.22.1
-        * Observables v0.5.4
-* Mit dem "cd()" command zu dem Verzeichnis navigieren, indem "IdealGas.jl" enthalten ist
-* Include("IdealGas.jl")
-* IdealGas.demo()
-</sup></sub>
+    
+<sub><td>**Running the Application:** *(Instructions in German)* </td></sub><br>
+<sub><td>Starten des Programms:</td></sub>
+<sub><td><br>1. Installieren von Julia</td></sub>
+<sub><td><br>2. Installieren der nötigen Packages</td></sub>
+<sub><td><br>3. Julia Konsole öffnen</td></sub>
+         <br><sub><td>&nbsp;* Using Pkg</td></sub>
+         <br><sub><td>&nbsp;* Pkg.add("Paketname@vX.Y.Z")</td></sub>
+         <br> <sub><td>&nbsp;&nbsp;- Agents v5.14.0</td></sub>
+        <br><sub><td>&nbsp;&nbsp;- LinearAlgebra</td></sub>
+        <br><sub><td>&nbsp;&nbsp;- GLMakie v0.8.5</td></sub>
+        <br><sub><td>&nbsp;&nbsp;- InteractiveDynamics v0.22.1</td></sub>
+        <br><sub><td>&nbsp;&nbsp;- Observables v0.5.4</td></sub>
+<br><sub><td>4. Mit dem "cd()" command zu dem Verzeichnis navigieren, indem "IdealGas.jl" enthalten ist</td></sub>
+<br><sub><td>5. Include("IdealGas.jl")</td></sub>
+<br><sub><td>6. IdealGas.demo()</td></sub>
+
