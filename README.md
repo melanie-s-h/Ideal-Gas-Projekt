@@ -1,10 +1,18 @@
 # Ideal-Gas-Project
-<br>
 
-***This simulation will provide first-year engineering undergraduates with  hands-on experience of ideal gases. Users explore the behaviour of a closed ideal gas system by setting its thermodynamic state variables/constants (e.g., 𝑝, 𝑉, 𝑇, 𝐸𝐼 , 𝑆), applying work  and/or heat to the system.***
+***This simulation will provide first-year engineering undergraduates with  hands-on experience of ideal gases. Users explore the behaviour of a closed ideal gas system by setting its thermodynamic state variables/constants (e.g., 𝑝, 𝑉, 𝑇, 𝐸ᵢ, Δ𝑆), applying work  and/or heat to the system.***
 
 <hr>
-<br>
+
+
+<sub><td>The following video displays the simulation of **ideal gas behaviour** depending on the **system variables**</td></sub> <br>
+<sub><td>* pressure **p**</td></sub><br>
+<sub><td>* volume **V**</td></sub><br>
+<sub><td>* temperature **T**</td></sub><br>
+<sub><td>* internal energy **𝐸ᵢ**</td></sub><br>
+<sub><td>* entropy change **Δ𝑆**</td></sub><br>
+
+
 
 
 https://github.com/melanie-s-h/Ideal-Gas-Projekt/assets/134691659/b1b79bc2-4213-47bf-8091-8b954f52ccb2
