@@ -1,9 +1,17 @@
-# Ideal-Gas-Projekt
+# Ideal-Gas-Project
 <br>
-This simulation will provide first-year engineering undergraduates with  hands-on experience of ideal gases. Users explore the behaviour of a closed ideal gas system by setting its thermodynamic state variables/constants (e.g., 𝑝, 𝑉, 𝑇, 𝐸𝐼 , 𝑆), applying work  and/or heat to the system.
 
-![](file:///C:/Users/Melanie/Videos/github_julia_ideal_gas.mp4)
+***This simulation will provide first-year engineering undergraduates with  hands-on experience of ideal gases. Users explore the behaviour of a closed ideal gas system by setting its thermodynamic state variables/constants (e.g., 𝑝, 𝑉, 𝑇, 𝐸𝐼 , 𝑆), applying work  and/or heat to the system.***
 
+<hr>
+<br>
+
+![]("C:\Users\Melanie\Videos\github_julia_ideal_gas.mp4")
+
+<br>
+<hr>
+<br>
+**Running the Application:** *(Instructions in German)*
 Starten des Programms:
 1. installieren von Julia
 2. installieren der nötigen Packages
