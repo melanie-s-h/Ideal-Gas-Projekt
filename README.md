@@ -43,7 +43,8 @@ https://github.com/melanie-s-h/Ideal-Gas-Projekt/assets/134691659/b1b79bc2-4213-
 <hr>
 <br>
 
-**Running the Application:** *(Instructions in German)*
+<sub><sup>
+**Running the Application:** *(Instructions in German)* <br>
 Starten des Programms:<br>
 * Installieren von Julia
 * Installieren der nötigen Packages
@@ -58,3 +59,4 @@ Starten des Programms:<br>
 * Mit dem "cd()" command zu dem Verzeichnis navigieren, indem "IdealGas.jl" enthalten ist
 * Include("IdealGas.jl")
 * IdealGas.demo()
+</sup></sub>
